@@ -1,0 +1,70 @@
+// ─── Prisma 7 설정 ─────────────────────────────
+// generator: prisma generate 실행 시 src/generated/prisma/에 타입 생성
+// datasource: DB 연결 URL은 prisma.config.ts에서 관리 (Prisma 7 방식)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── 사용자 ────────────────────────────────────
+// 카카오 OAuth로 가입한 사용자. kakao_id가 고유 식별자.
+model User {
+  id        String    @id @default(cuid())
+  kakaoId   String    @unique @map("kakao_id")   // 카카오 고유 ID
+  nickname  String                                // 카카오 프로필 닉네임
+  createdAt DateTime  @default(now()) @map("created_at")
+  sessions  Session[]                             // 1:N — 사용자의 상담 세션들
+
+  @@map("users")
+}
+
+// ─── 상담 세션 ─────────────────────────────────
+// 하나의 상담 대화방. 카테고리(고민 분야)와 깊이(가벼운/깊은)를 가진다.
+model Session {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")             // FK → users.id
+  category  String                                // "career" | "relationship" | "health" | "finance" | "other"
+  level     String                                // "light" | "deep"
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id])
+  messages  Message[]                             // 1:N — 세션 내 메시지들
+
+  @@map("sessions")
+}
+
+// ─── 채팅 메시지 ───────────────────────────────
+// 사용자(user) 또는 AI(assistant)의 개별 메시지.
+// AI 응답에만 현실성 점수(reality_score)와 점수 상세(score_breakdown)가 붙는다.
+model Message {
+  id             String     @id @default(cuid())
+  sessionId      String     @map("session_id")    // FK → sessions.id
+  role           String                           // "user" | "assistant"
+  content        String                           // 메시지 본문
+  realityScore   Int?       @map("reality_score")  // AI 응답 전용: 현실성 점수 (0~100)
+  scoreBreakdown Json?      @map("score_breakdown") // AI 응답 전용: 항목별 점수 상세
+  createdAt      DateTime   @default(now()) @map("created_at")
+  session        Session    @relation(fields: [sessionId], references: [id])
+  shareCard      ShareCard?                       // 1:1 — 이 메시지로 만든 공유 카드 (없을 수 있음)
+
+  @@map("messages")
+}
+
+// ─── 공유 카드 ─────────────────────────────────
+// AI 응답 메시지 하나를 SNS 공유용 카드로 변환한 것.
+// message_id가 UNIQUE → 하나의 메시지에 최대 1개의 공유 카드.
+model ShareCard {
+  id        String   @id @default(cuid())
+  messageId String   @unique @map("message_id")   // FK → messages.id (1:1)
+  summary   String                                // AI 조언 요약 텍스트
+  score     Int                                   // 현실성 점수 (카드에 표시)
+  actions   Json                                  // 추천 액션 목록 (JSON 배열)
+  createdAt DateTime @default(now()) @map("created_at")
+  message   Message  @relation(fields: [messageId], references: [id])
+
+  @@map("share_cards")
+}
