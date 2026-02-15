@@ -1,21 +1,10 @@
-import os
-from tavily import TavilyClient
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.tools import DuckDuckGoSearchRun
 
 def get_search_tool():
     """
-    AG-10: Tavily 검색 도구
+    AG-10: DuckDuckGo 무료 검색 도구 (API Key 불필요)
     """
-    api_key = os.getenv("TAVILY_API_KEY")
-    if not api_key:
-        # 키가 없을 경우 결과가 비어있는 더미 도구 반환 또는 예외 처리
-        return None
-    
-    return TavilySearchResults(
-        api_key=api_key,
-        max_results=5,
-        search_depth="advanced"
-    )
+    return DuckDuckGoSearchRun()
 
 def get_statistics_search(category: str, keyword: str):
     """
