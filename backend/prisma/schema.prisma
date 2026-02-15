@@ -28,6 +28,8 @@ model User {
 model Session {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")             // FK → users.id
+  category  String    @default("etc")
+  level     String    @default("spicy")
   createdAt DateTime  @default(now()) @map("created_at")
   user      User      @relation(fields: [userId], references: [id])
   messages  Message[]                             // 1:N — 세션 내 메시지들

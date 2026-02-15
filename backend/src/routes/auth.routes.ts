@@ -5,6 +5,19 @@ import { env } from "../lib/env";
 import { prisma } from "../lib/prisma";
 import { authMiddleware } from "../middlewares/auth.middleware";
 
+function isPrismaUnavailableError(error: any) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const message = String(error.message || "");
+  return (
+    code === "P2021" ||
+    code === "P1001" ||
+    code === "ECONNREFUSED" ||
+    message.includes("does not exist") ||
+    message.includes("ECONNREFUSED")
+  );
+}
+
 export const authRouter = Router();
 
 const kakaoBodySchema = z.object({
@@ -102,5 +115,38 @@ authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
   } catch (err) {
     console.error("유저 조회 실패:", err);
     res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+// POST /api/auth/dev-login — 개발용 즉시 로그인 (인가 코드 불필요)
+authRouter.post("/dev-login", async (_req: Request, res: Response) => {
+  try {
+    const kakaoId = "dev-local-user";
+    const nickname = "테스트 유저";
+
+    let userId = "dev-user-id";
+
+    try {
+      const user = await prisma.user.upsert({
+        where: { kakaoId },
+        update: { nickname },
+        create: { kakaoId, nickname },
+      });
+      userId = user.id;
+    } catch (dbErr) {
+      if (!isPrismaUnavailableError(dbErr)) throw dbErr;
+      console.warn("[dev-login] DB unavailable. Using mock userId.");
+    }
+
+    const token = jwt.sign({ userId }, env.JWT_SECRET, {
+      expiresIn: "24h",
+    });
+
+    res.json({
+      token,
+      user: { id: userId, kakao_id: kakaoId, nickname: nickname },
+    });
+  } catch (err) {
+    console.error("개발 로그인 실패:", err);
+    res.status(500).json({ error: "DEV_AUTH_FAILED" });
   }
 });
