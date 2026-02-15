@@ -18,8 +18,12 @@ const app = express();
 
 // ─── CORS 설정 ─────────────────────────────────
 // 기본: Vite 로컬 개발 서버 (localhost:5173)
-// 배포 시: .env의 FRONTEND_URL (예: https://grogi.pages.dev) 추가
-const allowedOrigins = ["http://localhost:5173"];
+// 배포 시: grogi.store + .env의 FRONTEND_URL 추가
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://grogi.store",
+  "https://www.grogi.store",
+];
 if (env.FRONTEND_URL) {
   allowedOrigins.push(env.FRONTEND_URL);
 }
