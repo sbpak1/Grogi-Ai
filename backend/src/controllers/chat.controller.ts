@@ -10,12 +10,8 @@ export const chatController = {
                 : `dev-${Date.now()}`;
 
         try {
-            const session = await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
-            const canPersist = session.persist === true;
-
-            if (canPersist) {
-                await chatService.saveMessage(resolvedSessionId, "user", message);
-            }
+            await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
+            await chatService.saveMessage(resolvedSessionId, "user", message);
 
             const stream = await chatService.getAiResponseStream(
                 resolvedSessionId,
@@ -66,7 +62,7 @@ export const chatController = {
 
             stream.on("end", async () => {
                 try {
-                    if (fullAssistantMessage && canPersist) {
+                    if (fullAssistantMessage) {
                         const savedMsg = await chatService.saveMessage(
                             resolvedSessionId,
                             "assistant",
@@ -75,7 +71,7 @@ export const chatController = {
                             realityScore
                         );
 
-                        if (shareCard && savedMsg) {
+                        if (shareCard && savedMsg?.id) {
                             await chatService.saveShareCard(
                                 savedMsg.id,
                                 shareCard.summary,
