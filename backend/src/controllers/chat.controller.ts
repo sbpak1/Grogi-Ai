@@ -62,7 +62,7 @@ export const chatController = {
                         realityScore
                     );
 
-                    if (shareCard) {
+                    if (shareCard && savedMsg) {
                         await chatService.saveShareCard(
                             savedMsg.id,
                             shareCard.summary,

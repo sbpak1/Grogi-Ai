@@ -24,6 +24,14 @@ export async function postShare(messageId: string) {
   return res.data
 }
 
+function normalizeSseData(data: string) {
+  try {
+    return JSON.parse(data)
+  } catch {
+    return data
+  }
+}
+
 export function chatStream(payload: { sessionId?: string; message: string; images?: string[]; ocr_text?: string }, handlers: { onMessage: (chunk:string)=>void; onDone?: ()=>void; onError?: (err:any)=>void }){
   const token = localStorage.getItem('token')
   const url = `${API_BASE}/api/chat`
@@ -41,10 +49,28 @@ export function chatStream(payload: { sessionId?: string; message: string; image
       }
     },
     onmessage(ev){
-      if(ev.data === '[DONE]'){
+      if (ev.data === '[DONE]') {
         handlers.onDone && handlers.onDone()
-      } else {
-        handlers.onMessage(ev.data)
+        return
+      }
+
+      const parsed = normalizeSseData(ev.data)
+      if (typeof parsed === 'string') {
+        handlers.onMessage(parsed)
+        return
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.content === 'string') {
+          handlers.onMessage(parsed.content)
+          return
+        }
+        if (parsed.error) {
+          handlers.onError && handlers.onError(new Error(typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error)))
+          return
+        }
+        // ignore non-text events (status/score/share_card/etc)
+        return
       }
     },
     onerror(err){
