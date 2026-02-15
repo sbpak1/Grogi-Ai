@@ -1,17 +1,106 @@
-/**
- * 인증 라우터 (/api/auth)
- *
- * 카카오 OAuth 기반 로그인/회원가입을 처리한다.
- *
- * 엔드포인트 (Day 3 구현 예정):
- *   POST /api/auth/kakao  — 카카오 인가 코드로 로그인 (신규 유저면 자동 가입)
- *                            요청: { code: string }  (프론트에서 받은 인가 코드)
- *                            응답: { token: string, user: { id, nickname } }
- *
- *   GET  /api/auth/me     — 내 정보 조회 (authMiddleware 필요)
- *                            헤더: Authorization: Bearer <JWT>
- *                            응답: { id, nickname, createdAt }
- */
-import { Router } from "express";
+import { Router, Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import { z } from "zod/v4";
+import { env } from "../lib/env";
+import { prisma } from "../lib/prisma";
+import { authMiddleware } from "../middlewares/auth.middleware";
 
 export const authRouter = Router();
+
+const kakaoBodySchema = z.object({
+  code: z.string(),
+});
+
+// POST /api/auth/kakao — 카카오 인가 코드로 로그인
+authRouter.post("/kakao", async (req: Request, res: Response) => {
+  const parsed = kakaoBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "INVALID_REQUEST" });
+    return;
+  }
+
+  const { code } = parsed.data;
+
+  try {
+    // 1. 카카오 토큰 교환
+    const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        client_id: env.KAKAO_CLIENT_ID,
+        client_secret: env.KAKAO_CLIENT_SECRET,
+        redirect_uri: env.KAKAO_REDIRECT_URI,
+        code,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      res.status(401).json({ error: "INVALID_CODE" });
+      return;
+    }
+
+    const tokenData = (await tokenRes.json()) as { access_token: string };
+
+    // 2. 카카오 사용자 정보 조회
+    const userRes = await fetch("https://kapi.kakao.com/v2/user/me", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!userRes.ok) {
+      res.status(401).json({ error: "KAKAO_USER_FETCH_FAILED" });
+      return;
+    }
+
+    const kakaoUser = (await userRes.json()) as {
+      id: number;
+      properties?: { nickname?: string };
+    };
+
+    const kakaoId = String(kakaoUser.id);
+    const nickname = kakaoUser.properties?.nickname ?? "사용자";
+
+    // 3. DB upsert (있으면 닉네임 업데이트, 없으면 생성)
+    const user = await prisma.user.upsert({
+      where: { kakaoId },
+      update: { nickname },
+      create: { kakaoId, nickname },
+    });
+
+    // 4. JWT 발급 (24시간)
+    const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {
+      expiresIn: "24h",
+    });
+
+    res.json({
+      token,
+      user: { id: user.id, kakao_id: user.kakaoId, nickname: user.nickname },
+    });
+  } catch (err) {
+    console.error("카카오 로그인 실패:", err);
+    res.status(500).json({ error: "AUTH_FAILED" });
+  }
+});
+
+// GET /api/auth/me — 내 정보 조회
+authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: "USER_NOT_FOUND" });
+      return;
+    }
+
+    res.json({
+      id: user.id,
+      nickname: user.nickname,
+      createdAt: user.createdAt,
+    });
+  } catch (err) {
+    console.error("유저 조회 실패:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
