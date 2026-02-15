@@ -3,6 +3,49 @@ import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
 
 export const chatService = {
+    async ensureSessionForChat(sessionId: string, userId?: string) {
+        let resolvedUserId = userId;
+
+        if (!resolvedUserId) {
+            const devUser = await prisma.user.upsert({
+                where: { kakaoId: "dev-local-user" },
+                update: {},
+                create: {
+                    kakaoId: "dev-local-user",
+                    nickname: "Dev User",
+                },
+            });
+            resolvedUserId = devUser.id;
+        }
+
+        const existing = await prisma.session.findUnique({
+            where: { id: sessionId },
+            include: {
+                messages: {
+                    orderBy: { createdAt: "asc" },
+                    take: 20,
+                },
+            },
+        });
+
+        if (existing) return existing;
+
+        return await prisma.session.create({
+            data: {
+                id: sessionId,
+                userId: resolvedUserId,
+                category: "etc",
+                level: "spicy",
+            },
+            include: {
+                messages: {
+                    orderBy: { createdAt: "asc" },
+                    take: 20,
+                },
+            },
+        });
+    },
+
     async getChatHistory(sessionId: string) {
         return await prisma.message.findMany({
             where: { sessionId },
@@ -22,25 +65,20 @@ export const chatService = {
         });
     },
 
-    async getAiResponseStream(sessionId: string, userMessage: string, images?: string[], ocr_text?: string) {
-        const session = await prisma.session.findUnique({
-            where: { id: sessionId },
-            include: {
-                messages: {
-                    orderBy: { createdAt: "asc" },
-                    take: 20, // 최근 20개만
-                }
-            }
-        });
-
-        if (!session) throw new Error("Session not found");
+    async getAiResponseStream(
+        sessionId: string,
+        userMessage: string,
+        images?: string[],
+        ocr_text?: string,
+        userId?: string
+    ) {
+        const session = await this.ensureSessionForChat(sessionId, userId);
 
         const history = session.messages.map((m: { role: string; content: string }) => ({
             role: m.role,
-            content: m.content
+            content: m.content,
         }));
 
-        // AI 서버에 요청 (SSE 스트리밍)
         const response = await axios.post(
             `${env.AI_SERVER_URL}/agent/chat`,
             {
@@ -48,9 +86,9 @@ export const chatService = {
                 user_message: userMessage,
                 level: session.level,
                 category: session.category,
-                history: history,
-                images: images,
-                ocr_text: ocr_text,
+                history,
+                images,
+                ocr_text,
             },
             {
                 responseType: "stream",
@@ -69,5 +107,5 @@ export const chatService = {
                 actions,
             },
         });
-    }
+    },
 };
