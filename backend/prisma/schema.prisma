@@ -24,12 +24,10 @@ model User {
 }
 
 // ─── 상담 세션 ─────────────────────────────────
-// 하나의 상담 대화방. 카테고리(고민 분야)와 깊이(가벼운/깊은)를 가진다.
+// 하나의 상담 대화방. 분노게이지는 AI가 대화 맥락으로 자동 판단.
 model Session {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")             // FK → users.id
-  category  String                                // "career" | "relationship" | "health" | "finance" | "other"
-  level     String                                // "light" | "deep"
   createdAt DateTime  @default(now()) @map("created_at")
   user      User      @relation(fields: [userId], references: [id])
   messages  Message[]                             // 1:N — 세션 내 메시지들
