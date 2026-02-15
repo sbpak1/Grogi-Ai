@@ -2,7 +2,7 @@ import asyncio
 import os
 import json
 from dotenv import load_dotenv
-load_dotenv() # .env 파일 로드
+load_dotenv(override=True) # Prefer project .env over stale system-level OPENAI_API_KEY
 
 from app.agent.graph import build_graph
 from langchain_core.messages import HumanMessage, AIMessage
@@ -48,7 +48,14 @@ async def test_agent_cli():
                         import base64
                         with open(img_path, "rb") as image_file:
                             encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                            images.append(encoded_string)
+                            mime_type = {
+                                ".jpg": "image/jpeg",
+                                ".jpeg": "image/jpeg",
+                                ".png": "image/png",
+                                ".gif": "image/gif",
+                                ".webp": "image/webp",
+                            }.get(ext, "image/jpeg")
+                            images.append(f"data:{mime_type};base64,{encoded_string}")
                         print(f"✅ 이미지 파일 로드 성공: {os.path.basename(img_path)}")
                         
                         if user_input.lower() == 'i':
@@ -112,6 +119,9 @@ async def test_agent_cli():
                 print(f"응답: 지금은 위로가 필요해 보입니다. 전문가의 도움(1393)을 받으세요.")
             else:
                 response_text = result.get("diagnosis", "응답 생성 실패")
+                image_fact = result.get("image_analysis", "")
+                if image_fact and image_fact != "이미지 없음":
+                    print(f"\n[이미지 팩트]\n{image_fact}")
                 print(f"\n[Grogi AI 응답 - T-Gauge: {t_gauge}%]\n{response_text}")
                 print("-" * 20)
                 print(f"📊 현실회피지수: {result.get('reality_score', {}).get('total', 0)}점")

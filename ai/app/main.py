@@ -1,6 +1,10 @@
 import os
+import sys
 import asyncio
 from fastapi import FastAPI, Request
+
+# 패키지 경로 추가 (로컬 실행 시 'app' 모듈 인식용)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -30,6 +34,7 @@ class ChatRequest(BaseModel):
     category: str
     history: List[ChatMessage]
     images: Optional[List[str]] = None  # Base64encoded images or URLs
+    ocr_text: Optional[str] = None
 
 @app.get("/agent/health")
 async def health_check():

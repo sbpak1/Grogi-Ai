@@ -16,5 +16,13 @@
  *                              응답: 세션 객체 + messages[]
  */
 import { Router } from "express";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { sessionController } from "../controllers/session.controller";
 
 export const sessionRouter = Router();
+
+sessionRouter.use(authMiddleware);
+
+sessionRouter.post("/", sessionController.create);
+sessionRouter.get("/", sessionController.list);
+sessionRouter.get("/:id", sessionController.getDetail);
