@@ -58,7 +58,7 @@ function isIntermediateToken(text: string) {
 }
 
 export function chatStream(
-  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string },
+  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string; pdfs?: Array<{ filename: string; content: string }> },
   handlers: {
     onMessage: (chunk: string) => void;
     onDone?: () => void;
@@ -75,6 +75,7 @@ export function chatStream(
     message: payload.message,
     images: payload.images,
     ocr_text: payload.ocr_text,
+    pdfs: payload.pdfs,
   }
   let finished = false
   const finish = () => {
