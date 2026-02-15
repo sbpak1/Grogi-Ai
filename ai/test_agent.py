@@ -8,13 +8,6 @@ from app.agent.graph import build_graph
 from langchain_core.messages import HumanMessage, AIMessage
 
 async def test_agent_cli():
-    print("🥊 Grogi AI CLI Test Mode 🥊")
-    print("-" * 30)
-    
-    # API Key 확인 (테스트를 위해 필요)
-    if not os.getenv("OPENAI_API_KEY"):
-        print("경고: OPENAI_API_KEY가 설정되지 않았습니다. .env 파일이나 환경 변수를 확인하세요.")
-        # 임시로 더미 키를 넣을 수는 없으니 사용자에게 안내
         
     executor = build_graph()
     
@@ -110,7 +103,7 @@ async def test_agent_cli():
             result = await asyncio.to_thread(executor.invoke, state)
 
             if result.get("is_crisis"):
-                print("\n🚨 위기 감지 보호 모드 작동 🚨")
+                print("\n[CRISIS] 위기 감지 보호 모드 작동 [CRISIS]")
                 print(f"응답: 지금은 위로가 필요해 보입니다. 전문가의 도움(1393)을 받으세요.")
             else:
                 response_text = result.get("diagnosis", "응답 생성 실패")
@@ -119,7 +112,7 @@ async def test_agent_cli():
                     print(f"\n[이미지 팩트]\n{image_fact}")
                 print(f"\n[Grogi AI 응답]\n{response_text}")
                 print("-" * 20)
-                print(f"📊 현실회피지수: {result.get('reality_score', {}).get('total', 0)}점")
+                print(f"[Score] 현실회피지수: {result.get('reality_score', {}).get('total', 0)}점")
                 
                 # 히스토리에 추가
                 history.append({"role": "user", "content": user_input})
