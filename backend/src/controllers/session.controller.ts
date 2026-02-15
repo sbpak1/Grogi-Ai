@@ -3,13 +3,13 @@ import { sessionService } from "../services/session.service";
 
 export const sessionController = {
     async create(req: Request, res: Response) {
-        const { category, level } = req.body;
-        const userId = req.userId!;
+        const userId = req.userId as string;
 
         try {
-            const session = await sessionService.createSession(userId, category, level);
-            res.status(201).json(session);
+            const session = await sessionService.createSession(userId);
+            res.status(201).json({ ...session, session_id: session.id }); // Full object + compatibility key
         } catch (error) {
+            console.error("Session creation error:", error);
             res.status(500).json({ error: "세션 생성 실패" });
         }
     },

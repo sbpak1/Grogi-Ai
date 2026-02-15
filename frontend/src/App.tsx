@@ -1,42 +1,42 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import Chat from './pages/Chat'
+import Login from './pages/Login'
 
 export default function App() {
-  const [sessionId, setSessionId] = useState(() => localStorage.getItem('sessionId') || 'dev-session')
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
 
-  useEffect(() => {
-    localStorage.setItem('sessionId', sessionId)
-  }, [sessionId])
+  function handleLogin() {
+    setToken(localStorage.getItem('token') || '')
+  }
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('token', token)
-    } else {
-      localStorage.removeItem('token')
-    }
-  }, [token])
+  function handleLogout() {
+    localStorage.removeItem('token')
+    setToken('')
+  }
 
+  // 로그인 안 된 상태면 로그인 페이지
+  if (!token) {
+    return (
+      <div className="app">
+        <header>
+          <h1>Grogi</h1>
+        </header>
+        <main>
+          <Login onLogin={handleLogin} />
+        </main>
+      </div>
+    )
+  }
+
+  // 로그인 된 상태 → 바로 채팅
   return (
     <div className="app singleChat">
       <header>
-        <h1>Grogi Chat</h1>
+        <h1>Grogi</h1>
+        <button onClick={handleLogout} className="logoutBtn">로그아웃</button>
       </header>
       <main>
-        <div className="chatConfig">
-          <input
-            value={sessionId}
-            onChange={(e) => setSessionId(e.target.value)}
-            placeholder="session id"
-          />
-          <input
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="bearer token (optional)"
-            type="password"
-          />
-        </div>
-        <Chat key={sessionId} sessionId={sessionId} />
+        <Chat />
       </main>
     </div>
   )

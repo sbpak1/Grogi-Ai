@@ -23,6 +23,22 @@ function isPrismaUnavailableError(error: any) {
     );
 }
 
+function isMessageSessionForeignKeyError(error: any) {
+    if (!error) return false;
+    const code = String(error.code || "");
+    const modelName = String(error.meta?.modelName || "");
+    const message = String(error.message || "");
+    const constraint = String(error.meta?.constraint || "");
+
+    return (
+        code === "P2003" &&
+        modelName === "Message" &&
+        (constraint.includes("messages_session_id_fkey") ||
+            message.includes("messages_session_id_fkey") ||
+            message.includes("Foreign key constraint violated"))
+    );
+}
+
 export const chatService = {
     async ensureSessionForChat(sessionId: string, userId?: string) {
         try {
@@ -119,6 +135,10 @@ export const chatService = {
                 },
             });
         } catch (error: any) {
+            if (isMessageSessionForeignKeyError(error)) {
+                console.warn(`[chatService] Session ${sessionId} is not persisted. Skipping message save.`);
+                return null;
+            }
             if (!isPrismaUnavailableError(error)) throw error;
             return null;
         }
