@@ -27,6 +27,11 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class PdfAttachment(BaseModel):
+    filename: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     session_id: str
     user_message: str
@@ -35,6 +40,7 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage]
     images: Optional[List[str]] = None
     ocr_text: Optional[str] = None
+    pdfs: Optional[List[PdfAttachment]] = None
 
 
 @app.get("/agent/health")
@@ -87,6 +93,7 @@ async def real_agent_generator(request: ChatRequest):
         "category": request.category,
         "history": [msg.dict() for msg in request.history],
         "images": request.images or [],
+        "pdfs": [p.dict() for p in request.pdfs] if request.pdfs else [],
         "status": "starting",
         "current_section": "diagnosis",
     }
@@ -119,15 +126,38 @@ async def real_agent_generator(request: ChatRequest):
 
                 if node_name == "crisis_check":
                     res = event["data"]["output"]
-                    if res.get("is_crisis"):
+                    crisis_level = res.get("crisis_level", "safe")
+
+                    if crisis_level == "crisis":
                         yield {
                             "event": "crisis",
-                            "data": json.dumps(
-                                {
-                                    "message": "지금은 혼자 버티는 것보다 즉시 전문 도움을 받는 게 우선입니다.",
-                                    "hotlines": ["자살예방 1393", "정신건강위기 1577-0199", "긴급복지 129"],
-                                }
-                            ),
+                            "data": json.dumps({
+                                "message": (
+                                    "야, 장난 아니고 진지하게 말할게.\n"
+                                    "이건 나랑 대화로 풀 수 있는 영역이 아니야.\n"
+                                    "지금 네 상태는 전문가한테 말하는 게 맞아.\n"
+                                    "전화 한 통이면 돼. 부담 없어."
+                                ),
+                                "hotlines": [
+                                    {"name": "자살예방상담전화", "number": "1393", "desc": "24시간, 전화하면 바로 상담사 연결"},
+                                    {"name": "정신건강위기상담전화", "number": "1577-0199", "desc": "24시간, 문자 상담도 가능"},
+                                    {"name": "긴급복지", "number": "129", "desc": "복지 지원 연결"},
+                                ],
+                                "follow_up": "전화가 부담되면 카카오톡에서 '마음이음'검색해봐. 채팅 상담도 돼.",
+                            }),
+                        }
+                        yield {"event": "done", "data": "{}"}
+                        return
+
+                    elif crisis_level == "unclear":
+                        yield {
+                            "event": "token",
+                            "data": json.dumps({
+                                "content": (
+                                    "야 잠만.\n"
+                                    "지금 그거 진심이야?"
+                                ),
+                            }),
                         }
                         yield {"event": "done", "data": "{}"}
                         return

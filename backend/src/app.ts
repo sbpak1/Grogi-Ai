@@ -36,7 +36,7 @@ app.use(
 );
 
 // ─── 공통 미들웨어 ──────────────────────────────
-app.use(express.json()); // JSON request body 파싱
+app.use(express.json({ limit: '15mb' })); // PDF base64 포함 대용량 요청 허용
 
 // ─── 헬스 체크 ──────────────────────────────────
 // GET / → 서버 생존 확인용 (배포 후 모니터링에 사용)
