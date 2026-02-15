@@ -66,6 +66,7 @@ export function chatStream(
     onMeta?: (text: string) => void;
     onScore?: (score: any) => void;
     onShareCard?: (card: any) => void;
+    onCrisis?: (data: { message: string; hotlines: string[] }) => void;
   }
 ) {
   const token = localStorage.getItem('token')
@@ -114,6 +115,14 @@ export function chatStream(
             handlers.onMeta?.(t)
           }
         }
+        return
+      }
+
+      if (ev.event === 'crisis') {
+        if (parsed && typeof parsed === 'object') {
+          handlers.onCrisis?.(parsed as any)
+        }
+        finish()
         return
       }
 

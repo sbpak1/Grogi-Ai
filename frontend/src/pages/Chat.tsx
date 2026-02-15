@@ -8,7 +8,6 @@ export default function Chat() {
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [streaming, setStreaming] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [realityScore, setRealityScore] = useState<any>(null)
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
 
@@ -100,7 +99,6 @@ export default function Chat() {
             }
           },
           onScore(score) {
-            setRealityScore(score)
             const summary = typeof score?.summary === 'string' ? score.summary.trim() : ''
             if (summary) {
               setMessages((prev) => {
@@ -116,6 +114,19 @@ export default function Chat() {
           },
           onMeta(text) {
             setAnalysisPreview(text)
+            scrollToBottom()
+          },
+          onCrisis(data) {
+            const hotlines = data.hotlines?.join(', ') || ''
+            const crisisMsg = `${data.message}\n\n${hotlines}`
+            setMessages((prev) => {
+              const copy = [...prev]
+              const last = copy[copy.length - 1]
+              if (last && last.role === 'assistant') {
+                copy[copy.length - 1] = { ...last, content: crisisMsg }
+              }
+              return copy
+            })
             scrollToBottom()
           },
           onDone() {
@@ -171,7 +182,6 @@ export default function Chat() {
   function handleNewChat() {
     setSessionId(null)
     setMessages([])
-    setRealityScore(null)
   }
 
   return (
@@ -192,11 +202,6 @@ export default function Chat() {
             <span className="msgContent">{m.content}</span>
           </div>
         ))}
-        {realityScore && (
-          <div className="msg msg-system">
-            📊 <b>현실회피지수: {realityScore.total}점</b>
-          </div>
-        )}
         {analysisPreview && streaming && (
           <div className="msg msg-system">
             <span className="msgRole">분석</span>
