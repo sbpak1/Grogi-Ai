@@ -116,6 +116,19 @@ export default function Chat() {
             setAnalysisPreview(text)
             scrollToBottom()
           },
+          onCrisis(data) {
+            const hotlines = data.hotlines?.join(', ') || ''
+            const crisisMsg = `${data.message}\n\n${hotlines}`
+            setMessages((prev) => {
+              const copy = [...prev]
+              const last = copy[copy.length - 1]
+              if (last && last.role === 'assistant') {
+                copy[copy.length - 1] = { ...last, content: crisisMsg }
+              }
+              return copy
+            })
+            scrollToBottom()
+          },
           onDone() {
             setAnalysisPreview(null)
             setStreaming(false)
