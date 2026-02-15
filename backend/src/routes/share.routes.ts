@@ -1,18 +1,64 @@
-/**
- * 공유 카드 라우터 (/api/share)
- *
- * AI 응답 메시지를 SNS 공유용 카드로 변환한다.
- * 공유 카드는 1:1로 message에 연결된다 (message_id UNIQUE).
- *
- * 엔드포인트 (Day 3 구현 예정):
- *   POST /api/share      — 공유 카드 생성 (authMiddleware 필요)
- *                           요청: { messageId: string }
- *                           처리: 해당 메시지의 요약/점수/액션을 카드로 변환
- *                           응답: 생성된 ShareCard 객체
- *
- *   GET  /api/share/:id  — 공유 카드 조회 (비로그인도 가능 — 공개 링크)
- *                           응답: { summary, score, actions }
- */
-import { Router } from "express";
+import { Router, Request, Response } from "express";
+import { z } from "zod/v4";
+import { prisma } from "../lib/prisma";
+import { authMiddleware } from "../middlewares/auth.middleware";
 
 export const shareRouter = Router();
+
+const shareBodySchema = z.object({
+  message_id: z.string(),
+});
+
+// POST /api/share — 공유 카드 조회 (인증 필요)
+shareRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
+  const parsed = shareBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "INVALID_REQUEST" });
+    return;
+  }
+
+  try {
+    const card = await prisma.shareCard.findUnique({
+      where: { messageId: parsed.data.message_id },
+    });
+
+    if (!card) {
+      res.status(404).json({ error: "CARD_NOT_FOUND" });
+      return;
+    }
+
+    res.json({
+      summary: card.summary,
+      score: card.score,
+      actions: card.actions,
+    });
+  } catch (err) {
+    console.error("공유 카드 조회 실패:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
+
+// GET /api/share/:id — 공유 카드 공개 조회 (인증 불필요)
+shareRouter.get("/:id", async (req: Request, res: Response) => {
+  const cardId = req.params.id as string;
+
+  try {
+    const card = await prisma.shareCard.findUnique({
+      where: { id: cardId },
+    });
+
+    if (!card) {
+      res.status(404).json({ error: "CARD_NOT_FOUND" });
+      return;
+    }
+
+    res.json({
+      summary: card.summary,
+      score: card.score,
+      actions: card.actions,
+    });
+  } catch (err) {
+    console.error("공유 카드 조회 실패:", err);
+    res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+});
