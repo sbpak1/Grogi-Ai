@@ -35,7 +35,8 @@ class AgentState(TypedDict):
 AI_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=AI_ROOT / ".env", override=True)
 
-llm = ChatOpenAI(model="gpt-4o")
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+llm_mini = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 
 def crisis_check(state: AgentState):
@@ -54,7 +55,7 @@ def crisis_check(state: AgentState):
             ("user", "{input}"),
         ]
     )
-    chain = crisis_prompt | llm | StrOutputParser()
+    chain = crisis_prompt | llm_mini | StrOutputParser()
     result = chain.invoke({"input": user_msg})
 
     return {"is_crisis": "CRISIS" in result.upper()}
@@ -73,7 +74,7 @@ def analyze_input(state: AgentState):
             ("user", "{input}"),
         ]
     )
-    chain = analysis_prompt | llm | StrOutputParser()
+    chain = analysis_prompt | llm_mini | StrOutputParser()
     category = chain.invoke({"input": state["user_message"]}).strip().lower()
 
     valid_categories = ["career", "love", "finance", "self", "etc"]
@@ -141,12 +142,16 @@ def generate_response(state: AgentState):
 이미지 분석(팩트): {state.get('image_analysis', '없음')}
 
 [응답 규칙]
-1. **첫 문장 - 맥락 확인**: 답변의 시작은 반드시 사용자의 말을 요약하며 "그러니까 지금 ~라는 거지?"라고 팩트만 드라이하게 확인하십시오. 
-2. **냉소적 상황 분석**: 사용자의 행동이 왜 비논리적이거나 비효율적인지 데이터와 논리 기반으로 지적하십시오. 걱정이나 격려가 섞인 어투는 즉시 폐기하십시오. 
-3. **구조적 제안**: 답변 끝에는 무조건 **'선택지 2개 중 택일'** 혹은 **'가장 중요한 우선순위 딱 1개'**를 던지십시오. 
-4. **감정 배제**: "다행이다", "잘했다" 같은 감정적 판단은 배제하고, 오직 "효율적이다", "논리적이다" 관점에서만 말하십시오. 
-5. **질문 절제**: 질문은 답변 전체를 통틀어 **최대 1개**만 허용합니다. 
-6. **이미지 분석 적극 활용**: 위 이미지 분석 팩트가 있다면 이를 논리적 비판의 근거로 사용하십시오. 
+[응답 규칙]
+1. 모든 답변은 반드시 1문장마다 줄바꿈(\n)을 하여 실제 채팅처럼 가독성을 높이십시오. 뭉텅이로 출력하지 마십시오. 
+2. 첫 1문장은 [가짜 공감]으로 짧게 시작하고, 다음 1~2문장은 [핵심 팩트]로 모순을 찌르십시오.
+3. 그다음 반드시 `A안`, `B안`(필요 시 `C안`)을 제시하고, 각 안은 반드시 개별 줄로 작성하십시오.
+4. 대안 제시 뒤에는 **최적안 1개를 단정적으로 선택**하고, 선택 이유를 설명하십시오.
+5. 마지막 1문장은 "지금 당장 할 1스텝 + 다음 턴 보고 포맷"으로 끝내십시오.
+6. 오타 지적은 **명확한 오타**가 있을 때만 맨 마지막 줄에 한마디 덧붙이십시오. 똑같은 단어로 고치는 멍청한 짓은 절대 금지입니다.
+7. 관계 갈등(연애/인간관계)에서는 사과/합의 문장 템플릿 1~2문장을 포함하십시오.
+8. JSON, 코드블록, 장식형 마크다운은 출력하지 마십시오. 
+9. 이미지 분석 결과가 있다면 이를 답변에 자연스럽게 녹여내십시오. 
 """
 
     messages = [SystemMessage(content=full_system_prompt)]
