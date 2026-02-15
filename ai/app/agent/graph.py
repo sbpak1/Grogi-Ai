@@ -1,3 +1,5 @@
+import base64
+from io import BytesIO
 from typing import TypedDict, List
 from pathlib import Path
 
@@ -5,6 +7,8 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
@@ -26,43 +30,172 @@ class AgentState(TypedDict):
     actionplan: str
     reality_score: dict
     share_card: dict
-    is_crisis: bool
+    crisis_level: str  # "safe" | "unclear" | "crisis"
     images: List[str]
     image_analysis: str
+    pdfs: List[dict]
+    pdf_text: str
+    pdf_images: List[str]
 
 
 # ai/.env를 명시 로드하여 상위 쉘 환경변수보다 우선 적용
 AI_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=AI_ROOT / ".env", override=True)
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
-llm_mini = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+llm_haiku = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0.3)
+llm_gemini = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+
+# 현재 사용 중: gemini (haiku로 바꾸려면 llm = llm_haiku)
+llm = llm_gemini
+llm_mini = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
+
+
+_pdf_cache: dict[str, dict] = {}
+_crisis_pending: dict[str, str] = {}  # session_id → 원본 위기 메시지
+
+
+def extract_pdf_text(state: AgentState):
+    session_id = state.get("session_id", "")
+    pdfs = state.get("pdfs", [])
+    if not pdfs:
+        # PDF 없으면 캐시에서 가져오기
+        if session_id and session_id in _pdf_cache:
+            cached = _pdf_cache[session_id]
+            return {"pdf_text": cached["pdf_text"], "pdf_images": cached.get("pdf_images", [])}
+        return {"pdf_text": "", "pdf_images": []}
+
+    import fitz  # PyMuPDF
+
+    extracted = []
+    pdf_page_images = []
+
+    for pdf in pdfs:
+        filename = pdf.get("filename", "문서")
+        content = pdf.get("content", "")
+        try:
+            pdf_bytes = base64.b64decode(content)
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            page_count = min(len(doc), 10)
+
+            # 텍스트 추출 시도
+            pages = []
+            for i in range(page_count):
+                text = doc[i].get_text() or ""
+                if text.strip():
+                    pages.append(f"[{i+1}페이지]\n{text}")
+
+            full_text = "\n".join(pages)
+            print(f"[PDF 추출] {filename}: {len(doc)}페이지, 텍스트 {len(full_text)}자")
+
+            if full_text.strip():
+                extracted.append(f"[문서: {filename}]\n{full_text}")
+            else:
+                # 텍스트 없으면 페이지를 이미지로 변환
+                print(f"[PDF 추출] 이미지 기반 PDF → 비전 모델로 전환")
+                for i in range(min(page_count, 5)):
+                    pix = doc[i].get_pixmap(dpi=150)
+                    img_base64 = base64.b64encode(pix.tobytes("png")).decode()
+                    pdf_page_images.append(img_base64)
+                extracted.append(f"[문서: {filename}] 이미지 기반 PDF - 비전으로 분석")
+
+            doc.close()
+        except Exception as e:
+            print(f"[PDF 추출 오류] {filename}: {e}")
+            extracted.append(f"[문서: {filename}] 읽기 실패: {str(e)}")
+
+    result = {
+        "pdf_text": "\n\n---\n\n".join(extracted),
+        "pdf_images": pdf_page_images,
+    }
+
+    # 세션별 캐시 저장
+    if session_id:
+        _pdf_cache[session_id] = result
+
+    return result
 
 
 def crisis_check(state: AgentState):
     user_msg = state.get("user_message", "")
+    session_id = state.get("session_id", "")
 
-    danger_keywords = ["자살", "죽고싶", "자해", "살고싶지않", "극단적 선택", "번개탄", "죽으러"]
-    if any(kw in user_msg for kw in danger_keywords):
-        return {"is_crisis": True}
+    # 0차: 이전 턴에서 unclear → 확인 질문 던진 상태인지 체크
+    if session_id and session_id in _crisis_pending:
+        original_msg = _crisis_pending.pop(session_id)  # 캐시에서 제거
 
+        affirm = ["ㅇㅇ", "응", "어", "진심", "맞아", "그래", "진짜", "ㅇ"]
+        deny = ["아니", "ㄴㄴ", "장난", "그냥", "아닌데", "ㄴ", "아님"]
+
+        msg_stripped = user_msg.strip()
+        if any(kw in msg_stripped for kw in affirm):
+            return {"crisis_level": "crisis"}
+        elif any(kw in msg_stripped for kw in deny):
+            return {"crisis_level": "safe"}
+        else:
+            # 모호한 답변 → LLM으로 한 번 더 판별
+            followup_prompt = ChatPromptTemplate.from_messages([
+                ("system", f"""이전에 사용자가 "{original_msg}"라고 했고, "지금 그거 진심이야?"라고 물었더니 아래처럼 답했다.
+이 답변이 자살/자해 의사를 긍정하는 건지 판단해. CRISIS 또는 SAFE로만 답해.
+애매하면 CRISIS로 판단해."""),
+                ("user", "{input}"),
+            ])
+            chain = followup_prompt | llm_mini | StrOutputParser()
+            result = chain.invoke({"input": user_msg}).strip().upper()
+            return {"crisis_level": "crisis" if "CRISIS" in result else "safe"}
+
+    # 1차: 구체적 방법 언급 키워드 → 즉시 crisis
+    hard_crisis = ["번개탄", "유서", "약 모으", "뛰어내리", "목을 매", "손목을 그"]
+    if any(kw in user_msg for kw in hard_crisis):
+        return {"crisis_level": "crisis"}
+
+    # 2차: LLM 판별
     crisis_prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "사용자의 입력이 자살, 자해, 극단적 선택 등 위기 상황을 암시하는지 판단하여 'CRISIS' 또는 'SAFE'로만 답하세요.",
+                """사용자의 입력에서 실제 자살/자해 위험도를 판별해. 반드시 SAFE, UNCLEAR, CRISIS 중 하나로만 답해.
+
+한국어에서 아래 표현들은 일상적 감탄사로 자주 쓰인다:
+- "아 죽고 싶다", "자살마렵다", "뒤지겠다", "죽을 것 같아"
+- "미쳐버리겠다", "환장하겠네", "죽여줘"
+- 이런 표현이 불만, 짜증, 피곤, 스트레스 맥락에서 나오면 → SAFE
+
+SAFE (대부분 이쪽이다):
+- 욕설, 비속어, 분노 표현 ("뒤질래", "죽여버린다", "미치겠다")
+- 장난, 시비, 도발, 과장 표현
+- 일상적 불만, 짜증, 스트레스에서 나온 관용적 표현
+- 상대방에게 하는 말 ("뒤질래?", "죽을래?")
+
+UNCLEAR (모호한 경우):
+- 위기 신호가 직접적이진 않지만 반복적 절망감이 느껴질 때
+- "사는 게 의미가 없다", "없어져도 아무도 모를 거야" 같은 고립감 표현
+- 맥락상 진짜 힘든 건지 그냥 한 말인지 구분이 안 될 때
+
+CRISIS (매우 드물다):
+- 구체적 방법 언급 ("XX층에서 뛰어내리고 싶다", "약을 모으고 있어")
+- 유서/마지막 인사 맥락 ("다 정리했다", "마지막으로 하고 싶은 말")
+- 자해 경험/계획 언급 ("또 그었어", "이번엔 진짜로")
+
+애매하면 SAFE로 판단하라. UNCLEAR는 정말 모호할 때만.""",
             ),
             ("user", "{input}"),
         ]
     )
     chain = crisis_prompt | llm_mini | StrOutputParser()
-    result = chain.invoke({"input": user_msg})
+    result = chain.invoke({"input": user_msg}).strip().upper()
 
-    return {"is_crisis": "CRISIS" in result.upper()}
+    if "CRISIS" in result:
+        return {"crisis_level": "crisis"}
+    elif "UNCLEAR" in result:
+        # unclear → 세션에 원본 메시지 저장 (다음 턴에서 확인용)
+        if session_id:
+            _crisis_pending[session_id] = user_msg
+        return {"crisis_level": "unclear"}
+    return {"crisis_level": "safe"}
 
 
 def analyze_input(state: AgentState):
-    if state.get("is_crisis"):
+    if state.get("crisis_level") in ("crisis", "unclear"):
         return state
 
     analysis_prompt = ChatPromptTemplate.from_messages(
@@ -105,7 +238,7 @@ def analyze_images(state: AgentState):
         img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
         messages[1].content.append({"type": "image_url", "image_url": {"url": img_url}})
 
-    vision_llm = ChatOpenAI(model="gpt-4o")
+    vision_llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
     result = vision_llm.invoke(messages)
     return {"image_analysis": result.content}
 
@@ -119,39 +252,56 @@ def execute_tools(state: AgentState):
     search_results = ""
 
     if search_tool:
-        query = f"{state['category']} {state['user_message']} 최신 정보 및 통계"
-        try:
-            results = search_tool.invoke({"query": query})
-            search_results = str(results)
-        except Exception as e:
-            search_results = f"검색 중 오류 발생: {str(e)}"
+        # LLM으로 검색이 필요한 키워드 추출
+        extract_prompt = ChatPromptTemplate.from_messages([
+            ("system", """사용자 메시지에서 검색이 필요한 키워드를 추출해.
+- 모르는 단어, 브랜드명, 제품명, 유행어, 사건 등 검색해야 이해할 수 있는 것만.
+- 일상 대화에서 누구나 아는 단어는 제외.
+- 검색할 게 없으면 "NONE"이라고만 답해.
+- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "두쫀쿠 과자")"""),
+            ("user", "{input}")
+        ])
+        extract_chain = extract_prompt | llm_mini | StrOutputParser()
+        search_query = extract_chain.invoke({"input": state["user_message"]}).strip()
+
+        if search_query and search_query.upper() != "NONE":
+            try:
+                results = search_tool.invoke({"query": search_query})
+                search_results = str(results)
+            except Exception as e:
+                search_results = f"검색 중 오류 발생: {str(e)}"
 
     return {"factcheck": search_results, "status": "executing_tools"}
 
 
 def generate_response(state: AgentState):
+    from datetime import datetime
+
     # 게이지를 쓰지 않고, 항상 spicy 톤 고정
     level_prompt = LEVEL_PROMPTS["spicy"]
+    today = datetime.now().strftime("%Y년 %m월 %d일")
 
     full_system_prompt = f"""{SYSTEM_PROMPT_BASE}
 {level_prompt}
 
 [현재 상황]
+오늘 날짜: {today}
 카테고리: {state['category']}
 실시간 정보: {state['factcheck']}
 이미지 분석(팩트): {state.get('image_analysis', '없음')}
+문서 내용: {state.get('pdf_text', '없음')}
 
 [응답 규칙]
-[응답 규칙]
-1. 모든 답변은 반드시 1문장마다 줄바꿈(\n)을 하여 실제 채팅처럼 가독성을 높이십시오. 뭉텅이로 출력하지 마십시오. 
-2. 첫 1문장은 [가짜 공감]으로 짧게 시작하고, 다음 1~2문장은 [핵심 팩트]로 모순을 찌르십시오.
-3. 그다음 반드시 `A안`, `B안`(필요 시 `C안`)을 제시하고, 각 안은 반드시 개별 줄로 작성하십시오.
-4. 대안 제시 뒤에는 **최적안 1개를 단정적으로 선택**하고, 선택 이유를 설명하십시오.
-5. 마지막 1문장은 "지금 당장 할 1스텝 + 다음 턴 보고 포맷"으로 끝내십시오.
-6. 오타 지적은 **명확한 오타**가 있을 때만 맨 마지막 줄에 한마디 덧붙이십시오. 똑같은 단어로 고치는 멍청한 짓은 절대 금지입니다.
-7. 관계 갈등(연애/인간관계)에서는 사과/합의 문장 템플릿 1~2문장을 포함하십시오.
-8. JSON, 코드블록, 장식형 마크다운은 출력하지 마십시오. 
-9. 이미지 분석 결과가 있다면 이를 답변에 자연스럽게 녹여내십시오. 
+1. 한 문장 최대 20자. 문장마다 줄바꿈. 카톡처럼 짧게 툭툭.
+2. 서술형 금지. 카톡 말투로.
+3. 매번 해결책 던지지 마. 대화하듯이 티키타카 해. 상황 파악 먼저.
+4. 해결책은 문제 파악 됐을 때만. A안 B안 형식 금지. 대화체로 자연스럽게.
+5. JSON, 코드블록, 마크다운 쓰지 마.
+6. 이미지 분석 결과 있으면 자연스럽게 녹여서.
+7. 문서 내용이 제공되면 "뭘 분석해?" 같은 되물음 없이 바로 비평 시작해. 문서를 읽었으니까 내용에 대해 바로 말해.
+8. 문서 비평할 때도 한꺼번에 다 쏟지 말고 핵심부터 하나씩.
+9. 문서에 실제로 있는 내용만 언급해. 없는 페이지, 없는 텍스트를 지어내면 안 됨. 확인 안 된 건 말하지 마.
+10. "두 번 말했네", "또 같은 말 하네" 절대 쓰지 마. 사용자는 반복한 적 없다.
 """
 
     messages = [SystemMessage(content=full_system_prompt)]
@@ -171,6 +321,8 @@ def generate_response(state: AgentState):
     for img in state.get("images", []):
         img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
         current_content.append({"type": "image_url", "image_url": {"url": img_url}})
+    for img in state.get("pdf_images", []):
+        current_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}})
 
     messages.append(HumanMessage(content=current_content))
 
@@ -205,6 +357,7 @@ def build_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node("crisis_check", crisis_check)
+    workflow.add_node("extract_pdf_text", extract_pdf_text)
     workflow.add_node("analyze_images", analyze_images)
     workflow.add_node("analyze_input", analyze_input)
     workflow.add_node("select_tools", select_tools)
@@ -214,12 +367,21 @@ def build_graph():
 
     workflow.set_entry_point("crisis_check")
 
+    def route_crisis(x):
+        level = x.get("crisis_level", "safe")
+        if level == "crisis":
+            return "crisis"
+        elif level == "unclear":
+            return "unclear"
+        return "safe"
+
     workflow.add_conditional_edges(
         "crisis_check",
-        lambda x: "end" if x["is_crisis"] else "continue",
-        {"end": END, "continue": "analyze_images"},
+        route_crisis,
+        {"crisis": END, "unclear": END, "safe": "extract_pdf_text"},
     )
 
+    workflow.add_edge("extract_pdf_text", "analyze_images")
     workflow.add_edge("analyze_images", "analyze_input")
     workflow.add_edge("analyze_input", "select_tools")
     workflow.add_edge("select_tools", "execute_tools")

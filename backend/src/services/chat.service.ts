@@ -221,7 +221,8 @@ export const chatService = {
         userMessage: string,
         images?: string[],
         ocr_text?: string,
-        userId?: string
+        userId?: string,
+        pdfs?: Array<{ filename: string; content: string }>
     ) {
         const session = (await this.ensureSessionForChat(sessionId, userId)) as ChatSessionContext;
         const aiBaseUrl = env.AI_SERVER_URL.replace(/\/+$/, "");
@@ -241,6 +242,7 @@ export const chatService = {
                 history,
                 images,
                 ocr_text,
+                pdfs,
             },
             {
                 responseType: "stream",
