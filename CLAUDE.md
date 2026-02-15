@@ -70,29 +70,9 @@ npx prisma migrate dev # DB 마이그레이션 (DB 연결 필요)
 - **Message**: session_id FK, role, content, reality_score?, score_breakdown?
 - **ShareCard**: message_id FK(unique), summary, score, actions
 
-### Environment Variables (backend/.env - 로컬)
-```
-DATABASE_URL=postgresql://postgres:sPYYkSOMLoiQgmyYSFbTalbqsdyOdFBu@crossover.proxy.rlwy.net:19027/railway
-KAKAO_CLIENT_ID=f28aa0d50c54dd18646c358dcdb202c7
-KAKAO_CLIENT_SECRET=WfFCIAiiSAOeH3h9fhiXhMdDsdjUHRRh
-KAKAO_REDIRECT_URI=http://localhost:5173/auth/kakao
-JWT_SECRET=grogi-secret-key-2026
-AI_SERVER_URL=http://localhost:8000
-PORT=3000
-FRONTEND_URL=
-```
-
-### Railway 환경변수 (배포)
-```
-DATABASE_URL=postgresql://...railway.internal.../railway  (Railway 내부 DB)
-KAKAO_CLIENT_ID=f28aa0d50c54dd18646c358dcdb202c7
-KAKAO_CLIENT_SECRET=WfFCIAiiSAOeH3h9fhiXhMdDsdjUHRRh
-KAKAO_REDIRECT_URI=https://grogi.store/auth/kakao
-JWT_SECRET=grogi-secret-key-2026
-AI_SERVER_URL=http://Grogi-Ai.railway.internal:8000
-PORT=3000
-FRONTEND_URL=https://grogi.store
-```
+### Environment Variables
+- `backend/.env` 참고 (git 추적 안 함)
+- 필요 키: DATABASE_URL, KAKAO_CLIENT_ID, KAKAO_CLIENT_SECRET, KAKAO_REDIRECT_URI, JWT_SECRET, AI_SERVER_URL, PORT, FRONTEND_URL
 
 ## Frontend (frontend/)
 
@@ -118,19 +98,14 @@ FRONTEND_URL=https://grogi.store
 - **Search**: DuckDuckGo (무료, Tavily에서 변경)
 - **T-Gauge**: 분노게이지 0~100% 자동 조절
 
-### Railway 환경변수
-```
-OPENAI_API_KEY=sk-...
-PORT=8000
-```
+### Environment Variables
+- OPENAI_API_KEY, PORT (Railway 환경변수로 관리)
 
 ## 카카오 OAuth
 
-- REST API 키: f28aa0d50c54dd18646c358dcdb202c7
-- Client Secret: WfFCIAiiSAOeH3h9fhiXhMdDsdjUHRRh
+- 카카오 개발자 콘솔에서 REST API 키, Client Secret, Redirect URI 관리
 - Redirect URI (로컬): http://localhost:5173/auth/kakao
 - Redirect URI (배포): https://grogi.store/auth/kakao
-- 카카오 개발자 콘솔: 앱 > 플랫폼 키 > REST API 키 > 수정 > 카카오 로그인 리다이렉트 URI
 
 ## 완료된 작업 (Day 1~3)
 
