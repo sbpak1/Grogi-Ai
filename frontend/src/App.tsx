@@ -1,26 +1,42 @@
 import React, { useState } from 'react'
-import Login from './pages/Login'
-import Sessions from './pages/Sessions'
 import Chat from './pages/Chat'
+import Login from './pages/Login'
 
 export default function App() {
-  const [page, setPage] = useState<'login'|'sessions'|'chat'>('login')
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
 
+  function handleLogin() {
+    setToken(localStorage.getItem('token') || '')
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('token')
+    setToken('')
+  }
+
+  // 로그인 안 된 상태면 로그인 페이지
+  if (!token) {
+    return (
+      <div className="app">
+        <header>
+          <h1>Grogi</h1>
+        </header>
+        <main>
+          <Login onLogin={handleLogin} />
+        </main>
+      </div>
+    )
+  }
+
+  // 로그인 된 상태 → 바로 채팅
   return (
-    <div className="app">
+    <div className="app singleChat">
       <header>
         <h1>Grogi</h1>
-        <nav>
-          <button onClick={()=>setPage('login')}>Login</button>
-          <button onClick={()=>setPage('sessions')}>Sessions</button>
-          <button onClick={()=>setPage('chat')} disabled={!sessionId}>Chat</button>
-        </nav>
+        <button onClick={handleLogout} className="logoutBtn">로그아웃</button>
       </header>
       <main>
-        {page === 'login' && <Login onLogin={()=>setPage('sessions')} />}
-        {page === 'sessions' && <Sessions onOpen={(id)=>{ setSessionId(id); setPage('chat')}} />}
-        {page === 'chat' && sessionId && <Chat sessionId={sessionId} />}
+        <Chat />
       </main>
     </div>
   )

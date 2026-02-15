@@ -1,35 +1,30 @@
-import React, { useState } from 'react'
-import { createSession } from '../api'
+import React, { useEffect, useState } from 'react'
+import { getSessions } from '../api'
 
-export default function Sessions({ onOpen }: { onOpen?: (id:string)=>void }){
-  const [category, setCategory] = useState('default')
-  const [level, setLevel] = useState('normal')
-  const [created, setCreated] = useState<string | null>(null)
+export default function Sessions({ onOpen }: { onOpen?: (id: string) => void }) {
+  const [sessions, setSessions] = useState<any[]>([])
 
-  async function handleCreate(e: React.FormEvent){
-    e.preventDefault()
-    try{
-      const data = await createSession(category, level)
-      setCreated(data.sessionId || data.id || null)
-    }catch(err){
-      alert('세션 생성 실패')
-    }
-  }
+  useEffect(() => {
+    ;(async () => {
+      try {
+        const data = await getSessions()
+        if (Array.isArray(data)) setSessions(data)
+      } catch {
+        // ignore
+      }
+    })()
+  }, [])
 
   return (
     <div>
-      <h2>Sessions</h2>
-      <form onSubmit={handleCreate}>
-        <label>Category: <input value={category} onChange={e=>setCategory(e.target.value)} /></label>
-        <label>Level: <input value={level} onChange={e=>setLevel(e.target.value)} /></label>
-        <button type="submit">Create Session</button>
-      </form>
-      {created && (
-        <div>
-          <p>Created session: {created}</p>
-          <button onClick={()=>onOpen && onOpen(created)}>Open Chat</button>
+      <h2>상담 기록</h2>
+      {sessions.length === 0 && <p>상담 기록이 없습니다.</p>}
+      {sessions.map((s) => (
+        <div key={s.id} className="sessionItem">
+          <span>{new Date(s.createdAt).toLocaleDateString()}</span>
+          <button onClick={() => onOpen?.(s.id)}>열기</button>
         </div>
-      )}
+      ))}
     </div>
   )
 }

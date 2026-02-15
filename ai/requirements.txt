@@ -12,3 +12,4 @@ async-timeout
 sse-starlette
 httpx
 tiktoken
+duckduckgo-search
