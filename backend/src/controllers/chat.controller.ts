@@ -10,8 +10,12 @@ export const chatController = {
                 : `dev-${Date.now()}`;
 
         try {
-            await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
-            await chatService.saveMessage(resolvedSessionId, "user", message);
+            const session = await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
+            const canPersist = session.persist === true;
+
+            if (canPersist) {
+                await chatService.saveMessage(resolvedSessionId, "user", message);
+            }
 
             const stream = await chatService.getAiResponseStream(
                 resolvedSessionId,
@@ -24,61 +28,85 @@ export const chatController = {
             res.setHeader("Content-Type", "text/event-stream");
             res.setHeader("Cache-Control", "no-cache");
             res.setHeader("Connection", "keep-alive");
-
             let fullAssistantMessage = "";
             let realityScore: any = null;
             let shareCard: any = null;
+            let doneSentByUpstream = false;
 
             stream.on("data", (chunk: Buffer) => {
                 const lines = chunk.toString().split("\n");
                 for (const line of lines) {
-                    if (line.startsWith("data: ")) {
-                        const dataStr = line.replace("data: ", "").trim();
-                        if (!dataStr) continue;
+                    if (!line.startsWith("data: ")) continue;
+                    const dataStr = line.replace("data: ", "").trim();
+                    if (!dataStr) continue;
+                    if (dataStr === "[DONE]") {
+                        doneSentByUpstream = true;
+                        continue;
+                    }
 
-                        try {
-                            const parsed = JSON.parse(dataStr);
-                            if (parsed.content) fullAssistantMessage += parsed.content;
-                            if (parsed.reality_score) realityScore = parsed.reality_score;
-                            if (parsed.share_card) shareCard = parsed.share_card;
-                        } catch {
-                            // ignore non-JSON status events
+                    try {
+                        const parsed = JSON.parse(dataStr);
+                        if (parsed.content) fullAssistantMessage += parsed.content;
+                        if (parsed.reality_score) realityScore = parsed.reality_score;
+                        if (parsed.share_card) shareCard = parsed.share_card;
+                        if (
+                            typeof parsed.code === "string" &&
+                            parsed.code.toUpperCase().includes("ERROR") &&
+                            typeof parsed.message === "string"
+                        ) {
+                            console.error(`[chatController] Upstream AI error (${parsed.code}): ${parsed.message}`);
                         }
-
-                        res.write(line + "\n\n");
-                    } else if (line.trim()) {
-                        res.write(line + "\n\n");
+                    } catch {
+                        // ignore non-JSON events
                     }
                 }
             });
 
-            stream.on("end", async () => {
-                if (fullAssistantMessage) {
-                    const savedMsg = await chatService.saveMessage(
-                        resolvedSessionId,
-                        "assistant",
-                        fullAssistantMessage,
-                        realityScore?.total || 0,
-                        realityScore
-                    );
+            stream.pipe(res, { end: false });
 
-                    if (shareCard) {
-                        await chatService.saveShareCard(
-                            savedMsg.id,
-                            shareCard.summary,
-                            shareCard.score,
-                            shareCard.actions
+            stream.on("end", async () => {
+                try {
+                    if (fullAssistantMessage && canPersist) {
+                        const savedMsg = await chatService.saveMessage(
+                            resolvedSessionId,
+                            "assistant",
+                            fullAssistantMessage,
+                            realityScore?.total || 0,
+                            realityScore
                         );
+
+                        if (shareCard && savedMsg) {
+                            await chatService.saveShareCard(
+                                savedMsg.id,
+                                shareCard.summary,
+                                shareCard.score,
+                                shareCard.actions
+                            );
+                        }
                     }
+                } catch (persistError) {
+                    console.error("Chat persistence error:", persistError);
                 }
-                res.write("data: [DONE]\n\n");
+
+                if (!doneSentByUpstream) {
+                    res.write("data: [DONE]\n\n");
+                }
                 res.end();
             });
 
             stream.on("error", (err: any) => {
                 console.error("AI Stream Error:", err);
                 res.write(`data: ${JSON.stringify({ error: "AI stream error" })}\n\n`);
+                if (!doneSentByUpstream) {
+                    res.write("data: [DONE]\n\n");
+                }
                 res.end();
+            });
+
+            req.on("close", () => {
+                if (!res.writableEnded) {
+                    stream.destroy();
+                }
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);

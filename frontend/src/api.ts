@@ -4,7 +4,6 @@ import { fetchEventSource } from '@microsoft/fetch-event-source'
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
 const api = axios.create({ baseURL: API_BASE })
 
-// 요청마다 토큰 자동 첨부
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
@@ -16,9 +15,14 @@ export async function kakaoAuth(code: string) {
   return res.data
 }
 
-export async function createSession() {
-  const res = await api.post('/api/sessions')
+export async function devLogin() {
+  const res = await api.post('/api/auth/dev-login')
   return res.data
+}
+
+export async function createSession(category = 'etc', level = 'spicy') {
+  const res = await api.post('/api/sessions', { category, level })
+  return { ...res.data, session_id: res.data?.session_id || res.data?.id }
 }
 
 export async function getSessions() {
@@ -36,11 +40,48 @@ export async function postShare(messageId: string) {
   return res.data
 }
 
+function normalizeSseData(data: string) {
+  try {
+    return JSON.parse(data)
+  } catch {
+    return data
+  }
+}
+
+function isIntermediateToken(text: string) {
+  const t = text.trim()
+  if (!t) return true
+  if (t === 'SAFE' || t === 'CRISIS') return true
+  if (['career', 'love', 'finance', 'self', 'etc'].includes(t)) return true
+  if (/^-?\d+$/.test(t)) return true
+  return false
+}
+
 export function chatStream(
-  payload: { session_id: string; message: string; images?: string[]; ocr_text?: string },
-  handlers: { onMessage: (chunk: string) => void; onDone?: () => void; onError?: (err: any) => void }
+  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string },
+  handlers: {
+    onMessage: (chunk: string) => void;
+    onDone?: () => void;
+    onError?: (err: any) => void;
+    onMeta?: (text: string) => void;
+    onTGauge?: (value: number) => void;
+    onScore?: (score: any) => void;
+    onShareCard?: (card: any) => void;
+  }
 ) {
   const token = localStorage.getItem('token')
+  const normalizedPayload = {
+    sessionId: payload.sessionId || payload.session_id,
+    message: payload.message,
+    images: payload.images,
+    ocr_text: payload.ocr_text,
+  }
+  let finished = false
+  const finish = () => {
+    if (finished) return
+    finished = true
+    handlers.onDone?.()
+  }
 
   return fetchEventSource(`${API_BASE}/api/chat`, {
     method: 'POST',
@@ -48,20 +89,94 @@ export function chatStream(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(normalizedPayload),
     async onopen(response) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
     },
     onmessage(ev) {
       if (ev.data === '[DONE]') {
-        handlers.onDone?.()
-      } else {
-        handlers.onMessage(ev.data)
+        finish()
+        return
+      }
+
+      const parsed = normalizeSseData(ev.data)
+
+      if (ev.event === 'error') {
+        if (parsed && typeof parsed === 'object') {
+          const errMsg =
+            typeof (parsed as any).error === 'string'
+              ? (parsed as any).error
+              : typeof (parsed as any).message === 'string'
+                ? (parsed as any).message
+                : 'AI stream error'
+          handlers.onError?.(new Error(errMsg))
+        } else {
+          handlers.onError?.(new Error(typeof parsed === 'string' ? parsed : 'AI stream error'))
+        }
+        finish()
+        return
+      }
+
+      if (typeof parsed === 'string') {
+        if (!isIntermediateToken(parsed)) handlers.onMessage(parsed)
+        return
+      }
+
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.content === 'string' && !isIntermediateToken(parsed.content)) {
+          handlers.onMessage(parsed.content)
+          return
+        }
+
+        if (typeof (parsed as any).value === 'number') {
+          handlers.onTGauge?.((parsed as any).value)
+          return
+        }
+
+        if (
+          typeof (parsed as any).total === 'number' &&
+          ((parsed as any).scores || (parsed as any).breakdown)
+        ) {
+          handlers.onScore?.(parsed)
+          return
+        }
+
+        if ((parsed as any).summary && (parsed as any).actions) {
+          handlers.onShareCard?.(parsed)
+          return
+        }
+
+        if (typeof (parsed as any).summary === 'string' && typeof (parsed as any).total === 'number') {
+          // Old format fallback
+          handlers.onMeta?.(`분석: ${(parsed as any).summary}`)
+          return
+        }
+
+
+        if ((parsed as any).error) {
+          const err = typeof (parsed as any).error === 'string' ? (parsed as any).error : JSON.stringify((parsed as any).error)
+          handlers.onError?.(new Error(err))
+          finish()
+          return
+        }
+
+        if (
+          typeof (parsed as any).code === 'string' &&
+          (parsed as any).code.toUpperCase().includes('ERROR') &&
+          typeof (parsed as any).message === 'string'
+        ) {
+          handlers.onError?.(new Error((parsed as any).message))
+          finish()
+          return
+        }
       }
     },
     onerror(err) {
       handlers.onError?.(err)
       throw err
+    },
+    onclose() {
+      finish()
     },
   })
 }

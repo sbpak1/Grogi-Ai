@@ -11,6 +11,8 @@ export default function Chat() {
   const [streaming, setStreaming] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [tGauge, setTGauge] = useState(0)
+  const [realityScore, setRealityScore] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
 
@@ -82,12 +84,22 @@ export default function Chat() {
               scrollToBottom()
             }
           },
+          onTGauge(val) {
+            setTGauge(val)
+          },
+          onScore(score) {
+            setRealityScore(score)
+          },
           onDone() {
             setStreaming(false)
           },
-          onError() {
+          onError(err) {
             setStreaming(false)
-            setMessages((prev) => [...prev, { role: 'system', content: '연결 오류가 발생했습니다.' }])
+            const raw = err instanceof Error ? err.message : String(err ?? '')
+            const userMessage = raw.includes('Incorrect API key')
+              ? 'AI 서버 API 키가 유효하지 않습니다. ai/.env 의 OPENAI_API_KEY를 확인하세요.'
+              : `연결 오류: ${raw || '알 수 없는 오류'}`
+            setMessages((prev) => [...prev, { role: 'system', content: userMessage }])
           },
         },
       )
@@ -129,6 +141,9 @@ export default function Chat() {
     <div className="chatPanel">
       <div className="chatHeader">
         <h2>상담</h2>
+        <div style={{ marginLeft: 'auto', marginRight: '10px', fontSize: '0.9rem' }}>
+          🔥 T-Gauge: <b>{tGauge}%</b>
+        </div>
         <button onClick={handleNewChat} className="newChatBtn">새 상담</button>
       </div>
       <div className="chatWindow" ref={chatWindowRef}>
@@ -138,9 +153,14 @@ export default function Chat() {
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
             <span className="msgRole">{m.role === 'user' ? '나' : m.role === 'assistant' ? 'Grogi' : '시스템'}</span>
-            <span className="msgContent">{m.content}</span>
+            <span className="msgContent" style={{ whiteSpace: 'pre-wrap' }}>{m.content}</span>
           </div>
         ))}
+        {realityScore && (
+          <div className="msg msg-system">
+            📊 <b>현실회피지수: {realityScore.total}점</b>
+          </div>
+        )}
         {streaming && <div className="msg msg-system">응답 중...</div>}
         {ocrLoading && <div className="msg msg-system">이미지 분석 중...</div>}
       </div>
