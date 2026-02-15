@@ -34,8 +34,6 @@ export const chatService = {
             data: {
                 id: sessionId,
                 userId: resolvedUserId,
-                category: "etc",
-                level: "spicy",
             },
             include: {
                 messages: {
@@ -84,8 +82,6 @@ export const chatService = {
             {
                 session_id: sessionId,
                 user_message: userMessage,
-                level: session.level,
-                category: session.category,
                 history,
                 images,
                 ocr_text,

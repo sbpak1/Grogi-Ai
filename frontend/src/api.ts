@@ -2,15 +2,27 @@ import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
-const api = axios.create({ baseURL: API_BASE || '/' })
+const api = axios.create({ baseURL: API_BASE })
+
+// 요청마다 토큰 자동 첨부
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
 
 export async function kakaoAuth(code: string) {
   const res = await api.post('/api/auth/kakao', { code })
   return res.data
 }
 
-export async function createSession(category: string, level: string) {
-  const res = await api.post('/api/sessions', { category, level })
+export async function createSession() {
+  const res = await api.post('/api/sessions')
+  return res.data
+}
+
+export async function getSessions() {
+  const res = await api.get('/api/sessions')
   return res.data
 }
 
@@ -24,32 +36,32 @@ export async function postShare(messageId: string) {
   return res.data
 }
 
-export function chatStream(payload: { sessionId?: string; message: string; images?: string[]; ocr_text?: string }, handlers: { onMessage: (chunk:string)=>void; onDone?: ()=>void; onError?: (err:any)=>void }){
+export function chatStream(
+  payload: { session_id: string; message: string; images?: string[]; ocr_text?: string },
+  handlers: { onMessage: (chunk: string) => void; onDone?: () => void; onError?: (err: any) => void }
+) {
   const token = localStorage.getItem('token')
-  const url = `${API_BASE}/api/chat`
 
-  return fetchEventSource(url, {
+  return fetchEventSource(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(payload),
     async onopen(response) {
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
     },
-    onmessage(ev){
-      if(ev.data === '[DONE]'){
-        handlers.onDone && handlers.onDone()
+    onmessage(ev) {
+      if (ev.data === '[DONE]') {
+        handlers.onDone?.()
       } else {
         handlers.onMessage(ev.data)
       }
     },
-    onerror(err){
-      handlers.onError && handlers.onError(err)
+    onerror(err) {
+      handlers.onError?.(err)
       throw err
-    }
+    },
   })
 }
