@@ -17,7 +17,7 @@ def calculate_reality_score_logic(user_message: str, ai_response: str) -> dict:
     """
     AG-12: LLM 기반 현실회피지수 산출 (High Score = High Avoidance)
     """
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
     parser = JsonOutputParser(pydantic_object=RealityScore)
     
