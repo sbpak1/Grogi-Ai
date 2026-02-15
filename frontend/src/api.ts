@@ -1,7 +1,8 @@
 import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
-const api = axios.create({ baseURL: '/' })
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
+const api = axios.create({ baseURL: API_BASE || '/' })
 
 export async function kakaoAuth(code: string) {
   const res = await api.post('/api/auth/kakao', { code })
@@ -23,14 +24,22 @@ export async function postShare(messageId: string) {
   return res.data
 }
 
-export function chatStream(payload: { sessionId?: string; message: string }, handlers: { onMessage: (chunk:string)=>void; onDone?: ()=>void; onError?: (err:any)=>void }){
-  return fetchEventSource('/api/chat', {
+export function chatStream(payload: { sessionId?: string; message: string; images?: string[]; ocr_text?: string }, handlers: { onMessage: (chunk:string)=>void; onDone?: ()=>void; onError?: (err:any)=>void }){
+  const token = localStorage.getItem('token')
+  const url = `${API_BASE}/api/chat`
+
+  return fetchEventSource(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: JSON.stringify(payload),
+    async onopen(response) {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+    },
     onmessage(ev){
       if(ev.data === '[DONE]'){
         handlers.onDone && handlers.onDone()
@@ -40,6 +49,7 @@ export function chatStream(payload: { sessionId?: string; message: string }, han
     },
     onerror(err){
       handlers.onError && handlers.onError(err)
+      throw err
     }
   })
 }

@@ -13,5 +13,12 @@
  *                           응답: AI 메시지 객체 { content, realityScore, scoreBreakdown }
  */
 import { Router } from "express";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { chatController } from "../controllers/chat.controller";
 
 export const chatRouter = Router();
+
+chatRouter.use(authMiddleware);
+
+chatRouter.get("/:sessionId", chatController.getHistory);
+chatRouter.post("/", chatController.send);

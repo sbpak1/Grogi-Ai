@@ -1,26 +1,42 @@
-import React, { useState } from 'react'
-import Login from './pages/Login'
-import Sessions from './pages/Sessions'
+import React, { useEffect, useState } from 'react'
 import Chat from './pages/Chat'
 
 export default function App() {
-  const [page, setPage] = useState<'login'|'sessions'|'chat'>('login')
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem('sessionId') || 'dev-session')
+  const [token, setToken] = useState(() => localStorage.getItem('token') || '')
+
+  useEffect(() => {
+    localStorage.setItem('sessionId', sessionId)
+  }, [sessionId])
+
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem('token', token)
+    } else {
+      localStorage.removeItem('token')
+    }
+  }, [token])
 
   return (
-    <div className="app">
+    <div className="app singleChat">
       <header>
-        <h1>Grogi</h1>
-        <nav>
-          <button onClick={()=>setPage('login')}>Login</button>
-          <button onClick={()=>setPage('sessions')}>Sessions</button>
-          <button onClick={()=>setPage('chat')} disabled={!sessionId}>Chat</button>
-        </nav>
+        <h1>Grogi Chat</h1>
       </header>
       <main>
-        {page === 'login' && <Login onLogin={()=>setPage('sessions')} />}
-        {page === 'sessions' && <Sessions onOpen={(id)=>{ setSessionId(id); setPage('chat')}} />}
-        {page === 'chat' && sessionId && <Chat sessionId={sessionId} />}
+        <div className="chatConfig">
+          <input
+            value={sessionId}
+            onChange={(e) => setSessionId(e.target.value)}
+            placeholder="session id"
+          />
+          <input
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="bearer token (optional)"
+            type="password"
+          />
+        </div>
+        <Chat key={sessionId} sessionId={sessionId} />
       </main>
     </div>
   )
