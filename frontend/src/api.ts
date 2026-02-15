@@ -64,7 +64,6 @@ export function chatStream(
     onDone?: () => void;
     onError?: (err: any) => void;
     onMeta?: (text: string) => void;
-    onTGauge?: (value: number) => void;
     onScore?: (score: any) => void;
     onShareCard?: (card: any) => void;
   }
@@ -101,6 +100,23 @@ export function chatStream(
 
       const parsed = normalizeSseData(ev.data)
 
+      if (ev.event === 'analysis_preview') {
+        if (parsed && typeof parsed === 'object') {
+          handlers.onMeta?.(JSON.stringify(parsed, null, 2))
+          return
+        }
+
+        if (typeof parsed === 'string') {
+          const t = parsed.trim()
+          try {
+            handlers.onMeta?.(JSON.stringify(JSON.parse(t), null, 2))
+          } catch {
+            handlers.onMeta?.(t)
+          }
+        }
+        return
+      }
+
       if (ev.event === 'error') {
         if (parsed && typeof parsed === 'object') {
           const errMsg =
@@ -117,6 +133,27 @@ export function chatStream(
         return
       }
 
+      if (ev.event === 'score' && parsed && typeof parsed === 'object') {
+        handlers.onScore?.(parsed)
+        return
+      }
+
+      if (ev.event === 'share_card' && parsed && typeof parsed === 'object') {
+        handlers.onShareCard?.(parsed)
+        return
+      }
+
+      if (ev.event === 'token') {
+        if (parsed && typeof parsed === 'object' && typeof (parsed as any).content === 'string') {
+          if (!isIntermediateToken((parsed as any).content)) handlers.onMessage((parsed as any).content)
+          return
+        }
+        if (typeof parsed === 'string' && !isIntermediateToken(parsed)) {
+          handlers.onMessage(parsed)
+        }
+        return
+      }
+
       if (typeof parsed === 'string') {
         if (!isIntermediateToken(parsed)) handlers.onMessage(parsed)
         return
@@ -125,11 +162,6 @@ export function chatStream(
       if (parsed && typeof parsed === 'object') {
         if (typeof parsed.content === 'string' && !isIntermediateToken(parsed.content)) {
           handlers.onMessage(parsed.content)
-          return
-        }
-
-        if (typeof (parsed as any).value === 'number') {
-          handlers.onTGauge?.((parsed as any).value)
           return
         }
 
