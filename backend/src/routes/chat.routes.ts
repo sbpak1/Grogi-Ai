@@ -171,7 +171,7 @@ chatRouter.post("/", async (req: Request, res: Response) => {
     // 7. done → DB 트랜잭션 저장
     if (contentBuffer) {
       try {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           const assistantMsg = await tx.message.create({
             data: {
               sessionId: session_id,
