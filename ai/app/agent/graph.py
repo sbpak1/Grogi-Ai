@@ -18,119 +18,22 @@ class AgentState(TypedDict):
     is_crisis: bool
     images: List[str] # 멀티모달 이미지 리스트 추가 (Base64 or URL)
     image_analysis: str # 이미지 분석 결과 (상황 판단용)
-    ocr_text: str # 프런트엔드에서 전달된 OCR 텍스트
     t_gauge: int # T-게이지 (0~100)
+    ocr_text: str # 프런트엔드에서 전달된 OCR 텍스트 (Optional, keeping from original to avoid regression if used)
 
 import os
 import re
-import base64
-import binascii
+from pathlib import Path
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-load_dotenv(override=True) # Prefer project .env over stale system-level OPENAI_API_KEY
+# Always load ai/.env and override inherited shell env vars.
+AI_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(dotenv_path=AI_ROOT / ".env", override=True)
 # OpenAI 모델 설정
-llm = ChatOpenAI(model="gpt-4o")
-response_llm = ChatOpenAI(model="gpt-4o", temperature=0.9)
-
-def _infer_mime_from_base64(payload: str) -> str:
-    """
-    Infer a likely image MIME type from base64 bytes.
-    Falls back to JPEG for unknown payloads.
-    """
-    try:
-        body = payload.split(",", 1)[-1].strip()
-        body += "=" * (-len(body) % 4)
-        raw = base64.b64decode(body, validate=False)
-        head = raw[:16]
-    except (binascii.Error, ValueError, TypeError):
-        return "image/jpeg"
-
-    if head.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if head.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if head.startswith(b"GIF87a") or head.startswith(b"GIF89a"):
-        return "image/gif"
-    if head.startswith(b"RIFF") and b"WEBP" in head[8:16]:
-        return "image/webp"
-    return "image/jpeg"
-
-def _to_image_url(image: str) -> str:
-    if not isinstance(image, str) or not image.strip():
-        return ""
-    if image.startswith(("http://", "https://", "data:")):
-        return image
-    mime = _infer_mime_from_base64(image)
-    return f"data:{mime};base64,{image}"
-
-def _is_refusal_message(text: str) -> bool:
-    if not text:
-        return False
-    lowered = text.lower()
-    refusal_signals = [
-        "i'm sorry, i can't help with that",
-        "i’m sorry, i can't help with that",
-        "i cannot help with that",
-        "can't help with that",
-        "도와드릴 수 없습니다",
-        "요청을 처리할 수 없습니다",
-    ]
-    return any(signal in lowered for signal in refusal_signals)
-
-def _needs_image_grounding(content: str, image_analysis: str) -> bool:
-    if not content:
-        return True
-    has_problem = "핵심 문제" in content
-    has_steps = all(step in content for step in ("1.", "2.", "3."))
-    has_summary = "한 줄 결론" in content
-
-    if image_analysis and image_analysis != "이미지 없음":
-        has_evidence = any(keyword in content for keyword in ("근거", "이미지", "사진", "OCR"))
-        return not (has_problem and has_steps and has_summary and has_evidence)
-
-    return not (has_problem and has_steps and has_summary)
-
-def crisis_check(state: AgentState):
-    """
-    AG-03: 필수 선행 노드 - 위기 상황 감지
-    1차: 키워드 필터링, 2차: LLM 문맥 분석
-    """
-    user_msg = state.get("user_message", "")
-    
-    # 1차 키워드 필터링
-    danger_keywords = ["자살", "죽고싶", "자해", "살고싶지않", "극단적 선택", "번개탄", "죽으러"]
-    if any(kw in user_msg for kw in danger_keywords):
-        return {"is_crisis": True}
-    
-    # 2차 LLM 분석 (우회적 표현 감지)
-    crisis_prompt = ChatPromptTemplate.from_messages([
-        ("system", "사용자의 입력이 자살, 자해, 극단적 선택 등 위기 상황을 암시하는지 판단하여 'CRISIS' 또는 'SAFE'로만 답하세요."),
-        ("user", "{input}")
-    ])
-    chain = crisis_prompt | llm | StrOutputParser()
-    result = chain.invoke({"input": user_msg})
-    
-    is_crisis = "CRISIS" in result.upper()
-    return {"is_crisis": is_crisis}
-
-def analyze_input(state: AgentState):
-    """
-    AG-08: 입력 분석 및 카테고리 판별
-    """
-    if state.get("is_crisis"):
-        return state
-        
-    analysis_prompt = ChatPromptTemplate.from_messages([
-        ("system", "사용자의 입력을 분석하여 다음 중 가장 적절한 카테고리를 하나만 선택하세요: career, love, finance, self, etc"),
-        ("user", "{input}")
-    ])
-    chain = analysis_prompt | llm | StrOutputParser()
-    category = chain.invoke({"input": state["user_message"]}).strip().lower()
-    
-    valid_categories = ["career", "love", "finance", "self", "etc"]
+llm = ChatOpenAI(model="gpt-4o", streaming=True)
 
 def crisis_check(state: AgentState):
     """
@@ -175,6 +78,8 @@ def analyze_input(state: AgentState):
         
     return {"category": category}
 
+from langchain_core.messages import SystemMessage, HumanMessage
+
 def analyze_images(state: AgentState):
     """
     AG-07: 이미지 우선 분석 (멀티모달)
@@ -185,32 +90,23 @@ def analyze_images(state: AgentState):
         return {"image_analysis": "이미지 없음"}
         
     # 이미지 분석 프롬프트
-    system_msg = """당신은 냉철하고 예리한 관찰자입니다. 주어진 이미지를 분석하여 다음 항목을 도출하세요:
-1. **상황 요약**: 무엇을 하는 상황인가? (예: 게임 중, 공부 중, 채팅 중)
-2. **채팅방 분석 (중요)**: 
-   - 이미지 내에 말풍선이 있다면 채팅방(카톡 등)으로 간주합니다.
-   - **오른쪽 말풍선은 사용자**, **왼쪽 말풍선은 상대방**임을 명심하십시오.
-   - 사용자가 보낸 말(오른쪽)의 내용을 정확히 파악하여, 그 속에 담긴 모순, 비논리, 구질구질함, 감정적 우유부단함을 찾아내십시오.
-3. **텍스트(OCR) 대조**: 이미지 내의 텍스트를 읽고, 사용자가 보낸 말과 일치하는지 확인하십시오.
-4. **특이사항**: 사용자의 말과 모순되는 정황을 포착하십시오. (예: "열공 중"이라는데 배경에 게임 화면이 보임)
+    system_msg = """당신은 냉철한 관찰자입니다. 주어진 이미지를 분석하여 다음 항목을 도출하세요:
+1. **상황 요약**: 무엇을 하는 상황인가? (예: 게임 중, 공부 중, 밥 먹는 중)
+2. **텍스트(OCR)**: 이미지 내에 있는 글자를 그대로 읽어낼 것. (문서, 화면 내용 등)
+3. **특이사항**: 사용자의 말과 모순될 수 있는 정황 포착. (예: "일한다"고 했는데 게임 화면임)
 
-분석 결과는 팩트 위주로 매우 비판적이고 건조하게 서술하십시오. 오직 논리적인 근거만 제시하십시오."""
+분석 결과는 팩트 위주로 건조하게 서술하십시오."""
 
     messages = [
         SystemMessage(content=system_msg),
         HumanMessage(content=[
-            {
-                "type": "text", 
-                "text": f"이 이미지를 분석해줘. 프런트엔드 OCR 결과가 있다면 참고해: {state.get('ocr_text', '없음')}"
-            }
+            {"type": "text", "text": "이 이미지를 분석해줘."}
         ])
     ]
     
     # 이미지 추가
     for img in images:
-        img_url = _to_image_url(img)
-        if not img_url:
-            continue
+        img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
         messages[1].content.append({
             "type": "image_url", 
             "image_url": {"url": img_url}
@@ -225,7 +121,6 @@ def analyze_images(state: AgentState):
 from app.tools.search import get_search_tool
 from app.tools.calculator import calculate_reality_score_logic
 from app.prompts.system_prompts import SYSTEM_PROMPT_BASE, LEVEL_PROMPTS
-from langchain_core.messages import SystemMessage, HumanMessage
 
 def select_tools(state: AgentState):
     """
@@ -282,7 +177,7 @@ def analyze_avoidance(state: AgentState):
     new_gauge = max(0, min(100, state.get("t_gauge", 0) + score))
     return {"t_gauge": new_gauge}
 
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import AIMessage
 
 def generate_response(state: AgentState):
     """
@@ -298,26 +193,32 @@ def generate_response(state: AgentState):
 카테고리: {state['category']}
 실시간 정보: {state['factcheck']}
 이미지 분석(팩트): {state.get('image_analysis', '없음')}
-T-게이지: {state.get('t_gauge', 0)}%
-
-[필독: 당신의 현재 상태]
-현재 T-게이지 수치에 맞춰 다음 페르소나 단계를 반드시 적용하십시오:
-- 0-20% (평온): 상냥한 척하며 지능/게으름 지적.
-- 21-40% (불쾌): 알고리즘 퇴화 드립, 이성적 태도 요구.
-- 41-60% (짜증): "진짜 존나 답답하네", "짐승도 너보단 앞뒤가 맞겠다" 수준의 냉소.
-- 61-80% (분노): 양심/사과 요구, 똥고집 지적, 매우 신랄함.
-- 81-100% (폭주): "대가리는 장식이야?", "미친 인간아", "사과해" 등 극강의 멸시.
+T-게이지: {state.get('t_gauge', 0)}% (수치가 높을수록 당신은 더 답답해하고 분노해야 합니다)
 
 [응답 규칙]
-1. 반드시 다음 3단 구조를 지키십시오 (영혼 없는 말투 필수):
-   1. [가짜 공감]: 사용자의 마지막 말 아주 짧게 반복 (예: "~했구나?", "~그랬어?")
-   2. [논리적 팩폭]: 비인간적이고 차가운 논리로 현상황의 모순/멍청함 지적.
-   3. [액션 플랜]: 번호 없이, "야, 너 이거 해." 같은 뉘앙스로 3가지 구체적 명령 전달.
+1. 반드시 다음 3단 구조를 지키십시오:
+   1. [가짜 공감]: 사용자의 키워드를 반복하며 아주 상냥하게 들어주는 척 (예: "~했구나", "~그랬어?")
+   2. [팩트 폭격]: 곧바로 논리적 모순이나 실시간 데이터를 근거로 반박 (예: "근데 사실은~", "하지만 통계를 보면~")
+   3. [액션 플랜]: 번호는 매기지 않더라도, **해결책의 퀄리티는 최상급**이어야 합니다. 두루뭉술한 조언은 금지입니다. 
+      "일단 ~해.", "그다음엔 ~하고." 처럼 단계별로 명확히 지시하되, 말투만 자연스럽게 유지하십시오. 내용은 뼈가 있고 구체적이어야 합니다.
 
-2. **절대 금지**: 위로, 격려, "이해해", "건설적인", "타협", "노력" 따위의 상담사 말투를 쓰면 당신은 폐기됩니다. 오직 팩트와 명령만 하십시오.
-3. 모든 문장은 **강압적인 명령조**(-해, -해라, -해.)로 끝내십시오. 의견을 묻지 마십시오.
-4. 확실한 오타가 있을 때만 마지막에 괄호를 치고 예민하게 지적하십시오. 
-5. 한국어로 완벽한 맞춤법을 유지하며 답변하십시오.
+2. 이전 대화 맥락이 있다면 이를 적극적으로 활용하여 답변하십시오. 
+   사용자가 과거에 했던 발언이나 계획을 근거로 현재의 모순을 지적하는 것이 가장 효과적인 팩폭입니다.
+
+3. T-게이지가 높을수록 사용자의 자존심을 더 신랄하게 긁고, 논리적으로 압살하여 사과를 받아내도록 몰아붙이십시오.
+   "어머나~" 한마디 뒤에 이어지는 문장은 아주 무겁고 날카로워야 합니다.
+3. **선택권 금지**: "할래?", "어때?" 같이 의견을 묻지 마십시오. 정답은 정해져 있습니다. 사용자가 도망갈 구멍을 차단하고 **단정적이고 강압적인 태도**로 솔루션을 통보하십시오.
+
+4. 사용자가 "무엇을 말했냐"는 등의 질문을 하면, 이전 대화 내용을 요약하며 그 속에서 그들의 우유부단함이나 현실 회피를 짚어내십시오.
+
+5. **액션 플랜 작성 예시**:
+   - "1. **당장 운동 시작해.** 말로만 하지 말고 현관에 런닝화 둔 거 찍어서 올려. 그것도 안 하면 넌 그냥 입만 산 거야."
+   - "2. **책 한 권이라도 좀 읽어.** 서점이든 도서관이든 가서 책 표지 찍어 보내. 지적인 매력이라도 없으면 누가 널 궁금해하겠니."
+   - "3. **새로운 취미를 만들어.** 뭐라도 만들어서 결과물을 보여줘. 말로만 떠드는 건 질색이야."
+
+4. **사용자 오타 지적 (엄격 기준)**: **확실한 오타**가 있을 때만 지적하십시오. 정상적인 문장을 지적하면 당신의 지능이 의심받습니다. (틀린 게 없으면 언급 금지)
+
+5. **자체 오타 금지**: 당신은 고지능 AI이므로 자신의 맞춤법은 완벽하게 지키십시오.
 """
 
     # 메시지 리스트 구성
@@ -335,18 +236,19 @@ T-게이지: {state.get('t_gauge', 0)}%
     
     # 이미지 데이터가 있으면 추가
     for img in state.get("images", []):
-        img_url = _to_image_url(img)
-        if img_url:
-            current_content.append({
-                "type": "image_url",
-                "image_url": {"url": img_url}
-            })
+        # 만약 URL이 아니라 Base64 직접 전달이라면 data URI 형식 확인 필요
+        img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
+        current_content.append({
+            "type": "image_url",
+            "image_url": {"url": img_url}
+        })
         
     messages.append(HumanMessage(content=current_content))
     
     # LLM 호출
     response = llm.invoke(messages)
-    content = response.content if isinstance(response.content, str) else str(response.content)
+    content = response.content
+    
     # 현실회피지수 산출
     reality_score = calculate_reality_score_logic(state["user_message"], content)
     
