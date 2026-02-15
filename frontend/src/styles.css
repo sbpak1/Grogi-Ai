@@ -38,9 +38,69 @@ body {
   padding: 12px;
 }
 
-.chatPanel h2 {
-  margin: 4px 0 10px;
+.chatHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chatHeader h2 {
+  margin: 0;
   font-size: 18px;
+}
+
+.newChatBtn {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.newChatBtn:hover {
+  background: #f5f6f8;
+}
+
+.logoutBtn {
+  border: none;
+  background: transparent;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.emptyChat {
+  text-align: center;
+  color: #999;
+  padding: 40px 0;
+}
+
+.msg-user {
+  text-align: right;
+}
+
+.msg-user .msgRole {
+  color: #333;
+  font-weight: bold;
+  margin-right: 6px;
+}
+
+.msg-assistant .msgRole {
+  color: #e44;
+  font-weight: bold;
+  margin-right: 6px;
+}
+
+.msg-system {
+  text-align: center;
+  color: #999;
+  font-size: 13px;
+}
+
+.msgContent {
+  white-space: pre-wrap;
 }
 
 .chatWindow {

@@ -78,6 +78,9 @@ async def real_agent_generator(request: ChatRequest):
             
             elif kind == "on_chat_model_stream":
                 # 토큰 스트리밍
+                tags = event.get("tags", [])
+                if "generate_response" not in tags:
+                    continue
                 content = event["data"]["chunk"].content
                 if content:
                     yield {"event": "token", "data": json.dumps({"content": content})}
@@ -97,14 +100,24 @@ async def real_agent_generator(request: ChatRequest):
                         yield {"event": "done", "data": "{}"}
                         return
                 
+                elif node_name == "analyze_avoidance":
+                    tg = event["data"]["output"].get("t_gauge", 0)
+                    yield {"event": "t_gauge", "data": json.dumps({"value": tg})}
+
                 elif node_name == "execute_tools":
                     yield {"event": "status", "data": json.dumps({"step": "searching", "detail": "실시간 데이터 검색 및 팩트 체크 완료"})}
                 
                 elif node_name == "generate_response":
                     final_result = event["data"]["output"]
+                    # Final assistant text for chat UI/persistence.
+                    diagnosis = final_result.get("diagnosis")
+                    if isinstance(diagnosis, str) and diagnosis.strip():
+                        yield {"event": "token", "data": json.dumps({"content": diagnosis})}
                     # 최종 스코어 및 카드 전송
-                    yield {"event": "score", "data": json.dumps(final_result["reality_score"])}
-                    yield {"event": "share_card", "data": json.dumps(final_result["share_card"])}
+                    yield {"event": "score", "data": json.dumps(final_result.get("reality_score", {}))}
+                    yield {"event": "share_card", "data": json.dumps(final_result.get("share_card", {}))}
+                    if "t_gauge" in final_result:
+                         yield {"event": "t_gauge", "data": json.dumps({"value": final_result["t_gauge"]})}
 
             # 섹션 전환 시뮬레이션 (프롬프트 내에서 섹션 구분자를 사용하면 더 정확함)
             # 현재는 간단히 스트리밍 시작 시 diagnosis 섹션 발행
