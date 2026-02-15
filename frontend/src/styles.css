@@ -1,0 +1,5 @@
+body{ font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0 }
+.app header{ background:#111;color:#fff;padding:12px;display:flex;align-items:center;justify-content:space-between }
+.app header nav button{ margin-left:8px }
+.chatWindow{ max-height:400px; overflow:auto; border:1px solid #ddd; padding:8px; margin:8px 0 }
+.msg{ padding:6px; border-bottom:1px solid #eee }
