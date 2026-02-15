@@ -20,12 +20,11 @@ async def test_agent_cli():
     
     # 초기 세팅
     history = []
-    t_gauge = 0
     level = "spicy"
     category = "career"
     
     while True:
-        user_input = input(f"\n[나] (T-Gauge: {t_gauge}%) (종료: q, 이미지 첨부: i): ")
+        user_input = input("\n[나] (종료: q, 이미지 첨부: i): ")
         if user_input.lower() == 'q':
             break
             
@@ -102,7 +101,6 @@ async def test_agent_cli():
             "category": category,
             "history": history,
             "images": images,
-            "t_gauge": t_gauge,
             "status": "starting",
             "current_section": "diagnosis"
         }
@@ -110,10 +108,7 @@ async def test_agent_cli():
         try:
             # 동기식 호출로 결과 확인
             result = await asyncio.to_thread(executor.invoke, state)
-            
-            # 게이지 업데이트 보관
-            t_gauge = result.get("t_gauge", t_gauge)
-            
+
             if result.get("is_crisis"):
                 print("\n🚨 위기 감지 보호 모드 작동 🚨")
                 print(f"응답: 지금은 위로가 필요해 보입니다. 전문가의 도움(1393)을 받으세요.")
@@ -122,7 +117,7 @@ async def test_agent_cli():
                 image_fact = result.get("image_analysis", "")
                 if image_fact and image_fact != "이미지 없음":
                     print(f"\n[이미지 팩트]\n{image_fact}")
-                print(f"\n[Grogi AI 응답 - T-Gauge: {t_gauge}%]\n{response_text}")
+                print(f"\n[Grogi AI 응답]\n{response_text}")
                 print("-" * 20)
                 print(f"📊 현실회피지수: {result.get('reality_score', {}).get('total', 0)}점")
                 

@@ -10,6 +10,76 @@ type ChatSessionContext = {
     persist: boolean;
 };
 
+type MockStoredMessage = {
+    id: string;
+    sessionId: string;
+    role: string;
+    content: string;
+    realityScore?: number;
+    scoreBreakdown?: any;
+    createdAt: Date;
+};
+
+type MockStoredSession = {
+    id: string;
+    category: string;
+    level: string;
+    messages: MockStoredMessage[];
+};
+
+const mockSessionStore = new Map<string, MockStoredSession>();
+
+function getOrCreateMockSession(sessionId: string): MockStoredSession {
+    const existing = mockSessionStore.get(sessionId);
+    if (existing) return existing;
+
+    const created: MockStoredSession = {
+        id: sessionId,
+        category: "etc",
+        level: "spicy",
+        messages: [],
+    };
+    mockSessionStore.set(sessionId, created);
+    return created;
+}
+
+function toMockContext(session: MockStoredSession): ChatSessionContext {
+    return {
+        id: session.id,
+        category: session.category,
+        level: session.level,
+        messages: session.messages.map((m) => ({ role: m.role, content: m.content })),
+        persist: false,
+    };
+}
+
+function appendMockMessage(
+    sessionId: string,
+    role: string,
+    content: string,
+    realityScore?: number,
+    scoreBreakdown?: any
+): MockStoredMessage {
+    const session = getOrCreateMockSession(sessionId);
+    const msg: MockStoredMessage = {
+        id: `mock-msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        sessionId,
+        role,
+        content,
+        realityScore,
+        scoreBreakdown,
+        createdAt: new Date(),
+    };
+    session.messages.push(msg);
+
+    // 메모리 사용량 제한: 최근 60개 메시지만 유지
+    if (session.messages.length > 60) {
+        session.messages.splice(0, session.messages.length - 60);
+    }
+
+    return msg;
+}
+
 function isPrismaUnavailableError(error: any) {
     if (!error) return false;
     const code = String(error.code || "");
@@ -101,13 +171,7 @@ export const chatService = {
         } catch (error: any) {
             if (!isPrismaUnavailableError(error)) throw error;
             console.warn("[chatService] DB unavailable. Falling back to non-persistent session mode.");
-            return {
-                id: sessionId,
-                category: "etc",
-                level: "spicy",
-                messages: [],
-                persist: false,
-            } as ChatSessionContext;
+            return toMockContext(getOrCreateMockSession(sessionId));
         }
     },
 
@@ -119,7 +183,15 @@ export const chatService = {
             });
         } catch (error: any) {
             if (!isPrismaUnavailableError(error)) throw error;
-            return [];
+            return getOrCreateMockSession(sessionId).messages.map((m) => ({
+                id: m.id,
+                sessionId: m.sessionId,
+                role: m.role,
+                content: m.content,
+                realityScore: m.realityScore,
+                scoreBreakdown: m.scoreBreakdown,
+                createdAt: m.createdAt,
+            }));
         }
     },
 
@@ -136,11 +208,11 @@ export const chatService = {
             });
         } catch (error: any) {
             if (isMessageSessionForeignKeyError(error)) {
-                console.warn(`[chatService] Session ${sessionId} is not persisted. Skipping message save.`);
-                return null;
+                console.warn(`[chatService] Session ${sessionId} is not persisted. Saving message to in-memory fallback.`);
+                return appendMockMessage(sessionId, role, content, realityScore, scoreBreakdown);
             }
             if (!isPrismaUnavailableError(error)) throw error;
-            return null;
+            return appendMockMessage(sessionId, role, content, realityScore, scoreBreakdown);
         }
     },
 
