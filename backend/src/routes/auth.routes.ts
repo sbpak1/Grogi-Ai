@@ -37,7 +37,6 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
   try {
     // 1. 카카오 토큰 교환
-    console.log("카카오 토큰 교환 시작. code:", code);
     const params = new URLSearchParams({
       grant_type: "authorization_code",
       client_id: env.KAKAO_CLIENT_ID,
@@ -45,7 +44,6 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
       redirect_uri: redirectUri || env.KAKAO_REDIRECT_URI,
       code,
     });
-    console.log("토큰 요청 파라미터:", params.toString());
 
     const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
       method: "POST",
@@ -61,7 +59,6 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     }
 
     const tokenData = (await tokenRes.json()) as { access_token: string; refresh_token?: string };
-    console.log("카카오 토큰 데이터 수신 완료.");
 
     // 2. 카카오 사용자 정보 조회
     const userRes = await fetch("https://kapi.kakao.com/v2/user/me", {
@@ -87,7 +84,6 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
         }
       };
     };
-    console.log("카카오 유저 데이터 수신:", JSON.stringify(kakaoUser));
 
     const kakaoId = String(kakaoUser.id);
     const nickname = kakaoUser.properties?.nickname ?? kakaoUser.kakao_account?.profile?.nickname ?? "사용자";
@@ -100,10 +96,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
     const email = kakaoUser.kakao_account?.email;
 
-    console.log(`[AUTH] Extracted Data - kakaoId: ${kakaoId}, nickname: ${nickname}, profileImage: ${profileImage}, email: ${email}`);
-
     // 3. DB upsert (있으면 정보 업데이트, 없으면 생성)
-    console.log(`[AUTH] Upserting user for kakaoId: ${kakaoId}, nickname: ${nickname}`);
     const user = await prisma.user.upsert({
       where: { kakaoId },
       update: {
@@ -122,7 +115,6 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
         kakaoRefreshToken: tokenData.refresh_token
       },
     });
-    console.log(`[AUTH] User session created: userId=${user.id} for kakaoId=${kakaoId}`);
 
     // 4. JWT 발급 (24시간)
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {
