@@ -4,9 +4,10 @@ import { sessionService } from "../services/session.service";
 export const sessionController = {
     async create(req: Request, res: Response) {
         const userId = req.userId as string;
+        const { privateMode } = req.body;
 
         try {
-            const session = await sessionService.createSession(userId);
+            const session = await sessionService.createSession(userId, !!privateMode);
             res.status(201).json({ ...session, session_id: session.id }); // Full object + compatibility key
         } catch (error) {
             console.error("Session creation error:", error);
@@ -33,6 +34,20 @@ export const sessionController = {
             res.json(session);
         } catch (error) {
             res.status(500).json({ error: "세션 조회 실패" });
+        }
+    },
+
+    async togglePrivate(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const userId = req.userId!;
+        const { privateMode } = req.body;
+
+        try {
+            const session = await sessionService.updatePrivacy(id, userId, privateMode);
+            res.json(session);
+        } catch (error) {
+            console.error("Session privacy update error:", error);
+            res.status(500).json({ error: "세션 공개여부 수정 실패" });
         }
     },
 };

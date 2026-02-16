@@ -24,11 +24,12 @@ function isUserNotFoundError(error: any) {
 }
 
 export const sessionService = {
-    async createSession(userId: string) {
+    async createSession(userId: string, privateMode: boolean = false) {
         const data = {
             userId,
             category: "etc",
             level: "spicy",
+            privateMode,
         };
         try {
             return await prisma.session.create({ data });
@@ -76,7 +77,10 @@ export const sessionService = {
     async getUserSessions(userId: string) {
         try {
             return await prisma.session.findMany({
-                where: { userId },
+                where: {
+                    userId,
+                    privateMode: false // 비밀 채팅은 목록에서 제외
+                },
                 orderBy: { createdAt: "desc" },
                 include: {
                     messages: {
@@ -88,6 +92,21 @@ export const sessionService = {
         } catch (error) {
             if (!isPrismaUnavailableError(error)) throw error;
             return [];
+        }
+    },
+
+    async updatePrivacy(sessionId: string, userId: string, privateMode: boolean) {
+        try {
+            return await prisma.session.update({
+                where: {
+                    id: sessionId,
+                    userId,
+                },
+                data: { privateMode },
+            });
+        } catch (error) {
+            if (!isPrismaUnavailableError(error)) throw error;
+            throw error;
         }
     },
 };

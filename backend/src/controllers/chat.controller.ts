@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import { chatService } from "../services/chat.service";
 
 export const chatController = {
     async send(req: Request, res: Response) {
-        const { sessionId, message, images, ocr_text, pdfs } = req.body;
+        const { sessionId, message, images, ocr_text, pdfs, privateMode } = req.body;
 
         if (images && images.length > 5) {
             res.status(400).json({ error: "이미지는 최대 5장까지 가능합니다" });
@@ -29,11 +30,13 @@ export const chatController = {
         const resolvedSessionId =
             typeof sessionId === "string" && sessionId.trim()
                 ? sessionId.trim()
-                : `dev-${Date.now()}`;
+                : crypto.randomUUID();
 
         try {
-            await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
-            await chatService.saveMessage(resolvedSessionId, "user", message);
+            const context = await chatService.ensureSessionForChat(resolvedSessionId, req.userId, !!privateMode);
+            if (context.persist) {
+                await chatService.saveMessage(resolvedSessionId, "user", message);
+            }
 
             const stream = await chatService.getAiResponseStream(
                 resolvedSessionId,
@@ -41,7 +44,8 @@ export const chatController = {
                 images,
                 ocr_text,
                 req.userId,
-                pdfs
+                pdfs,
+                !!privateMode
             );
 
             res.setHeader("Content-Type", "text/event-stream");
@@ -85,7 +89,7 @@ export const chatController = {
 
             stream.on("end", async () => {
                 try {
-                    if (fullAssistantMessage) {
+                    if (fullAssistantMessage && context.persist) {
                         const savedMsg = await chatService.saveMessage(
                             resolvedSessionId,
                             "assistant",
