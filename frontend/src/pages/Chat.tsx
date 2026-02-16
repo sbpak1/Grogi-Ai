@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { chatStream, createSession, getChatHistory } from '../api'
+import { chatStream, createSession, getChatHistory, createCalendarEvent } from '../api'
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -208,6 +208,23 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
     }
   }
 
+  const handleTestCalendar = async () => {
+    try {
+      const start = new Date(Date.now() + 3600000).toISOString(); // 1시간 뒤
+      const end = new Date(Date.now() + 7200000).toISOString();
+      await createCalendarEvent({
+        title: "Grogi 캘린더 테스트 📅",
+        description: "채팅창에서 테스트한 일정입니다.",
+        startAt: start,
+        endAt: end
+      });
+      alert("캘린더 일정 등록 성공!");
+    } catch (err) {
+      console.error(err);
+      alert("일정 등록 실패");
+    }
+  };
+
   return (
     <>
       <div className="chatWindowScroll" ref={chatWindowRef}>
@@ -268,6 +285,9 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
             <div className="leftActions">
               <button type="button" className="roundBtn" onClick={() => fileInputRef.current?.click()} title="이미지 업로드">
                 <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" /></svg>
+              </button>
+              <button type="button" className="roundBtn" onClick={handleTestCalendar} title="캘린더 테스트" style={{ marginLeft: '4px' }}>
+                <span style={{ fontSize: '16px' }}>📅</span>
               </button>
               <input type="file" multiple ref={fileInputRef} hidden onChange={(e) => e.target.files && processFiles(e.target.files)} />
             </div>

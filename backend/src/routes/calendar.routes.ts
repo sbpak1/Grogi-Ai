@@ -104,7 +104,7 @@ async function sendCalendarEvent(accessToken: string, event: { title: string, de
     body.append("calendar_id", "primary");
     body.append("event", JSON.stringify(eventData));
 
-    return fetch("https://kapi.kakao.com/v2/api/calendar/create/default", {
+    return fetch("https://kapi.kakao.com/v2/api/calendar/create/event", {
         method: "POST",
         headers: {
             "Authorization": `Bearer ${accessToken}`,
