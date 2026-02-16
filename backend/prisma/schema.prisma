@@ -14,24 +14,15 @@ datasource db {
 // ─── 사용자 ────────────────────────────────────
 // 카카오 OAuth로 가입한 사용자. kakao_id가 고유 식별자.
 model User {
-<<<<<<< HEAD
-  id        String    @id @default(cuid())
-  kakaoId   String    @unique @map("kakao_id")   // 카카오 고유 ID
-  nickname  String                                // 카카오 프로필 닉네임
-  kakaoAccessToken String? @map("kakao_access_token") // 카카오 API 호출용 토큰 (톡캘린더 등)
-  kakaoRefreshToken String? @map("kakao_refresh_token") // 액세스 토큰 갱신용
-  profileImage String? @map("profile_image") // 카카오 프로필 이미지 URL
-  createdAt DateTime  @default(now()) @map("created_at")
-  sessions  Session[]                             // 1:N — 사용자의 상담 세션들
-=======
-  id           String    @id @default(cuid())
-  kakaoId      String    @unique @map("kakao_id")   // 카카오 고유 ID
-  nickname     String                                // 카카오 프로필 닉네임
-  email        String?                               // 유저 이메일
-  profileImage String?   @map("profile_image")      // 카카오 프로필 이미지 URL
-  createdAt    DateTime  @default(now()) @map("created_at")
-  sessions     Session[]                             // 1:N — 사용자의 상담 세션들
->>>>>>> 4060d0c9e3212efe5ccc9dec33132870d3b58ea1
+  id                 String    @id @default(cuid())
+  kakaoId            String    @unique @map("kakao_id")   // 카카오 고유 ID
+  nickname           String                                // 카카오 프로필 닉네임
+  email              String?                               // 유저 이메일
+  profileImage       String?   @map("profile_image")      // 카카오 프로필 이미지 URL
+  kakaoAccessToken   String?   @map("kakao_access_token") // 카카오 API 호출용 토큰 (톡캘린더 등)
+  kakaoRefreshToken  String?   @map("kakao_refresh_token") // 액세스 토큰 갱신용
+  createdAt          DateTime  @default(now()) @map("created_at")
+  sessions           Session[]                             // 1:N — 사용자의 상담 세션들
 
   @@map("users")
 }
