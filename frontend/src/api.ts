@@ -30,8 +30,24 @@ export async function updateProfile(data: { nickname?: string; profileImage?: st
   return res.data
 }
 
-export async function createSession(category = 'etc', level = 'spicy') {
-  const res = await api.post('/api/sessions', { category, level })
+export async function updateSettings(settings: {
+  fontSize?: 'small' | 'medium' | 'large';
+  tGauge?: 'mild' | 'spicy' | 'hell';
+  expertise?: 'career' | 'love' | 'finance' | 'self' | 'etc';
+  responseStyle?: 'short' | 'long';
+  privateMode?: boolean;
+}) {
+  const res = await api.patch('/api/auth/settings', settings)
+  return res.data
+}
+
+export async function updateSessionPrivacy(sessionId: string, privateMode: boolean) {
+  const res = await api.patch(`/api/sessions/${sessionId}/private`, { privateMode })
+  return res.data
+}
+
+export async function createSession(privateMode = false, category = 'etc', level = 'spicy') {
+  const res = await api.post('/api/sessions', { category, level, privateMode })
   return { ...res.data, session_id: res.data?.session_id || res.data?.id }
 }
 
@@ -68,7 +84,7 @@ function isIntermediateToken(text: string) {
 }
 
 export function chatStream(
-  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string; pdfs?: Array<{ filename: string; content: string }> },
+  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string; pdfs?: Array<{ filename: string; content: string }>; privateMode?: boolean },
   handlers: {
     onMessage: (chunk: string) => void;
     onDone?: () => void;
@@ -86,6 +102,7 @@ export function chatStream(
     images: payload.images,
     ocr_text: payload.ocr_text,
     pdfs: payload.pdfs,
+    privateMode: (payload as any).privateMode,
   }
   let finished = false
   const finish = () => {

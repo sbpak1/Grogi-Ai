@@ -156,6 +156,11 @@ authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
       email: user.email,
       profileImage: user.profileImage,
       createdAt: user.createdAt,
+      fontSize: user.fontSize,
+      tGauge: user.tGauge,
+      expertise: user.expertise,
+      responseStyle: user.responseStyle,
+      privateMode: user.privateMode,
     });
   } catch (err) {
     console.error("유저 조회 실패:", err);
@@ -191,6 +196,41 @@ authRouter.patch("/profile", authMiddleware, async (req: Request, res: Response)
   } catch (err) {
     console.error("프로필 업데이트 실패:", err);
     res.status(500).json({ error: "UPDATE_FAILED" });
+  }
+});
+
+// PATCH /api/auth/settings — 내 설정 업데이트
+authRouter.patch("/settings", authMiddleware, async (req: Request, res: Response) => {
+  const settingsSchema = z.object({
+    fontSize: z.enum(["small", "medium", "large"]).optional(),
+    tGauge: z.enum(["mild", "spicy", "hell"]).optional(),
+    expertise: z.enum(["career", "love", "finance", "self", "etc"]).optional(),
+    responseStyle: z.enum(["short", "long"]).optional(),
+    privateMode: z.boolean().optional(),
+  });
+
+  const parsed = settingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "INVALID_REQUEST", details: parsed.error });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: parsed.data,
+    });
+
+    res.json({
+      fontSize: user.fontSize,
+      tGauge: user.tGauge,
+      expertise: user.expertise,
+      responseStyle: user.responseStyle,
+      privateMode: user.privateMode,
+    });
+  } catch (err) {
+    console.error("설정 업데이트 실패:", err);
+    res.status(500).json({ error: "SETTINGS_UPDATE_FAILED" });
   }
 });
 
