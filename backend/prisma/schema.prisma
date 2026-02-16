@@ -32,6 +32,7 @@ model User {
 model Session {
   id        String    @id @default(cuid())
   userId    String    @map("user_id")             // FK → users.id
+  title     String?                               // 대화방 제목 (첫 메시지 요약)
   category  String    @default("etc")
   level     String    @default("spicy")
   createdAt DateTime  @default(now()) @map("created_at")
