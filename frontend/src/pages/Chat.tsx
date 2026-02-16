@@ -9,9 +9,10 @@ type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 interface ChatProps {
   sessionId: string | null
   onSessionStarted: (id: string) => void
+  isPrivateRequested?: boolean
 }
 
-export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
+export default function Chat({ sessionId, onSessionStarted, isPrivateRequested = false }: ChatProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [streaming, setStreaming] = useState(false)
@@ -107,7 +108,7 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
     try {
       let currentSessionId = sessionId
       if (!currentSessionId) {
-        const data = await createSession()
+        const data = await createSession(isPrivateRequested)
         currentSessionId = data.session_id
         justStartedRef.current = true // 플래그 설정
         onSessionStarted(currentSessionId!)
@@ -122,6 +123,7 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
           message: text || (currentImages.length > 0 || currentPdfs.length > 0 ? '파일 분석해줘' : ''),
           images: currentImages.length > 0 ? currentImages : undefined,
           pdfs: currentPdfs.length > 0 ? currentPdfs.map(p => ({ filename: p.name, content: p.base64 })) : undefined,
+          privateMode: isPrivateRequested, // SSE 요청에도 프라이빗 여부 전달 (새 세션 생성 대비)
         },
         {
           onMessage(chunk) {
@@ -211,23 +213,57 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
     }
   }
 
-  const processFiles = (files: FileList) => {
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader()
-      if (file.type.startsWith('image/')) {
-        reader.onload = (e) => {
-          const base64 = (e.target?.result as string).split(',')[1]
-          setAttachedImages((prev) => [...prev, base64])
-        }
+  const processFiles = async (files: FileList) => {
+    const fileArray = Array.from(files)
+
+    // Helper: File to Base64
+    const fileToBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve((e.target?.result as string).split(',')[1])
         reader.readAsDataURL(file)
-      } else if (file.type === 'application/pdf') {
-        reader.onload = (e) => {
-          const base64 = (e.target?.result as string).split(',')[1]
-          setAttachedPdfs((prev) => [...prev, { name: file.name, base64 }])
-        }
-        reader.readAsDataURL(file)
+      })
+    }
+
+    // Process Images
+    const imageFiles = fileArray.filter(f => f.type.startsWith('image/'))
+    if (imageFiles.length > 0) {
+      const base64s = await Promise.all(imageFiles.map(fileToBase64))
+      const uniqueInBatch = Array.from(new Set(base64s))
+      const duplicates = uniqueInBatch.filter(b => attachedImages.includes(b))
+      const trulyNew = uniqueInBatch.filter(b => !attachedImages.includes(b))
+
+      if (duplicates.length > 0 || uniqueInBatch.length < base64s.length) {
+        alert('이미 추가된 이미지가 포함되어 있습니다.')
       }
-    })
+      if (trulyNew.length > 0) {
+        setAttachedImages(prev => [...prev, ...trulyNew.filter(b => !prev.includes(b))])
+      }
+    }
+
+    // Process PDFs
+    const pdfFiles = fileArray.filter(f => f.type === 'application/pdf')
+    if (pdfFiles.length > 0) {
+      const pdfResults = await Promise.all(pdfFiles.map(async (f) => ({
+        name: f.name,
+        base64: await fileToBase64(f)
+      })))
+
+      const existingB64s = attachedPdfs.map(p => p.base64)
+      const uniqueInBatch = pdfResults.filter((v, i, a) => a.findIndex(t => t.base64 === v.base64) === i)
+      const duplicates = uniqueInBatch.filter(p => existingB64s.includes(p.base64))
+      const trulyNew = uniqueInBatch.filter(p => !existingB64s.includes(p.base64))
+
+      if (duplicates.length > 0 || uniqueInBatch.length < pdfResults.length) {
+        alert('이미 추가된 PDF 파일이 포함되어 있습니다.')
+      }
+      if (trulyNew.length > 0) {
+        setAttachedPdfs(prev => {
+          const prevB64s = prev.map(p => p.base64)
+          return [...prev, ...trulyNew.filter(p => !prevB64s.includes(p.base64))]
+        })
+      }
+    }
   }
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -306,7 +342,18 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
               <button type="button" className="roundBtn" onClick={() => fileInputRef.current?.click()} title="이미지 업로드">
                 <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" /></svg>
               </button>
-              <input type="file" multiple ref={fileInputRef} hidden onChange={(e) => e.target.files && processFiles(e.target.files)} />
+              <input
+                type="file"
+                multiple
+                ref={fileInputRef}
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) {
+                    processFiles(e.target.files)
+                    e.target.value = '' // 같은 파일을 다시 선택할 수 있도록 초기화
+                  }
+                }}
+              />
             </div>
 
             <div className="rightActions">

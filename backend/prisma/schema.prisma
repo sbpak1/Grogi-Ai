@@ -22,6 +22,14 @@ model User {
   kakaoAccessToken   String?   @map("kakao_access_token") // 카카오 API 호출용 토큰 (톡캘린더 등)
   kakaoRefreshToken  String?   @map("kakao_refresh_token") // 액세스 토큰 갱신용
   createdAt          DateTime  @default(now()) @map("created_at")
+  
+  // 사용자 설정 (글로벌 기본값)
+  fontSize           String    @default("medium")         // "small" | "medium" | "large"
+  tGauge             String    @default("spicy")          // "mild" | "spicy" | "hell"
+  expertise          String    @default("etc")            // "career" | "love" | "finance" | "self" | "etc"
+  responseStyle      String    @default("short")          // "short" | "long"
+  privateMode        Boolean   @default(false)            // 글로벌 프라이빗 모드 여부
+  
   sessions           Session[]                             // 1:N — 사용자의 상담 세션들
 
   @@map("users")
@@ -30,12 +38,13 @@ model User {
 // ─── 상담 세션 ─────────────────────────────────
 // 하나의 상담 대화방. 분노게이지는 AI가 대화 맥락으로 자동 판단.
 model Session {
-  id        String    @id @default(cuid())
-  userId    String    @map("user_id")             // FK → users.id
-  title     String?                               // 대화방 제목 (첫 메시지 요약)
-  category  String    @default("etc")
-  level     String    @default("spicy")
-  createdAt DateTime  @default(now()) @map("created_at")
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")             // FK → users.id
+  title       String?                               // 대화방 제목 (첫 메시지 요약)
+  category    String    @default("etc")
+  level       String    @default("spicy")
+  privateMode Boolean   @default(false)            // 이 대화방의 프라이빗 여부
+  createdAt   DateTime  @default(now()) @map("created_at")
   user      User      @relation(fields: [userId], references: [id])
   messages  Message[]                             // 1:N — 세션 내 메시지들
 

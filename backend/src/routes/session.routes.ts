@@ -14,3 +14,4 @@ sessionRouter.use(authMiddleware);
 sessionRouter.post("/", sessionController.create);
 sessionRouter.get("/", sessionController.list);
 sessionRouter.get("/:id", sessionController.getDetail);
+sessionRouter.patch("/:id/private", sessionController.togglePrivate);

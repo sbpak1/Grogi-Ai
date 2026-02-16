@@ -110,7 +110,7 @@ function isMessageSessionForeignKeyError(error: any) {
 }
 
 export const chatService = {
-    async ensureSessionForChat(sessionId: string, userId?: string) {
+    async ensureSessionForChat(sessionId: string, userId?: string, privateMode: boolean = false) {
         try {
             let resolvedUserId = userId;
 
@@ -142,8 +142,14 @@ export const chatService = {
                     category: existing.category || "etc",
                     level: existing.level || "spicy",
                     messages: existing.messages.map((m) => ({ role: m.role, content: m.content })),
-                    persist: true,
+                    persist: !existing.privateMode, // privateMode가 true면 persist를 false로 설정
                 } as ChatSessionContext;
+            }
+
+            // 부모 세션이 DB에 없는데 프라이빗 요청이면 DB 생성 없이 모크 세션 사용
+            if (privateMode) {
+                console.log(`[chatService] Bypassing DB for private session: ${sessionId}`);
+                return toMockContext(getOrCreateMockSession(sessionId));
             }
 
             const created = await prisma.session.create({
@@ -152,6 +158,7 @@ export const chatService = {
                     userId: resolvedUserId,
                     category: "etc",
                     level: "spicy",
+                    privateMode: false, // 여기선 항상 false (프라이빗은 위에서 걸러짐)
                 },
                 include: {
                     messages: {
@@ -166,7 +173,7 @@ export const chatService = {
                 category: created.category || "etc",
                 level: created.level || "spicy",
                 messages: [],
-                persist: true,
+                persist: !created.privateMode, // privateMode가 true면 persist를 false로 설정
             } as ChatSessionContext;
         } catch (error: any) {
             const unavailable = isPrismaUnavailableError(error);
@@ -258,9 +265,10 @@ export const chatService = {
         images?: string[],
         ocr_text?: string,
         userId?: string,
-        pdfs?: Array<{ filename: string; content: string }>
+        pdfs?: Array<{ filename: string; content: string }>,
+        privateMode: boolean = false
     ) {
-        const session = (await this.ensureSessionForChat(sessionId, userId)) as ChatSessionContext;
+        const session = (await this.ensureSessionForChat(sessionId, userId, privateMode)) as ChatSessionContext;
         const aiBaseUrl = env.AI_SERVER_URL.replace(/\/+$/, "");
 
         const history = session.messages.map((m) => ({

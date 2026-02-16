@@ -414,8 +414,6 @@ def build_graph():
     workflow.add_node("select_tools", select_tools)
     workflow.add_node("execute_tools", execute_tools)
     workflow.add_node("generate_response", generate_response)
-    workflow.add_node("calculate_score", calculate_score)
-
     workflow.set_entry_point("crisis_check")
 
     def route_crisis(x):
@@ -437,7 +435,6 @@ def build_graph():
     workflow.add_edge("analyze_input", "select_tools")
     workflow.add_edge("select_tools", "execute_tools")
     workflow.add_edge("execute_tools", "generate_response")
-    workflow.add_edge("generate_response", "calculate_score")
-    workflow.add_edge("calculate_score", END)
+    workflow.add_edge("generate_response", END)
 
     return workflow.compile()
