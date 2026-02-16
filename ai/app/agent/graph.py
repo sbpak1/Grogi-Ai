@@ -303,7 +303,7 @@ def execute_tools(state: AgentState):
     return {"factcheck": search_results, "status": "executing_tools"}
 
 
-def generate_response(state: AgentState):
+async def generate_response(state: AgentState):
     from datetime import datetime
 
     # 게이지를 쓰지 않고, 항상 spicy 톤 고정
@@ -321,7 +321,7 @@ def generate_response(state: AgentState):
 문서 내용: {state.get('pdf_text', '없음')}
 
 [응답 규칙]
-1. 한 문장 최대 20자. 문장마다 줄바꿈. 카톡처럼 짧게 툭툭.
+1. 한 문장 최대 20자. 문장마다 반드시 줄바꿈. 카톡처럼 짧게 툭툭.
 2. 서술형 금지. 카톡 말투로.
 3. 매번 해결책 던지지 마. 대화하듯이 티키타카 해. 상황 파악 먼저.
 4. 해결책은 문제 파악 됐을 때만. A안 B안 형식 금지. 대화체로 자연스럽게.
@@ -339,7 +339,6 @@ def generate_response(state: AgentState):
     for msg in state.get("history", []):
         content = msg["content"]
         if msg["role"] == "user":
-            # 히스토리에 이미지가 있었다는 흔적 남기기 (이미지는 Base64라 히스토리에 다 넣기엔 너무 큼)
             if "[이미지" in content:
                 messages.append(HumanMessage(content=f"{content} (과거에 이미지를 보냈음)"))
             else:
@@ -372,8 +371,9 @@ def generate_response(state: AgentState):
 
     messages.append(HumanMessage(content=current_content))
 
-    response = llm.invoke(messages)
-    content = response.content if isinstance(response.content, str) else str(response.content)
+    content = ""
+    async for chunk in llm.astream(messages):
+        content += chunk.content
 
     return {
         "diagnosis": content,
