@@ -73,7 +73,7 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
         alert('로그인이 필요합니다. (API키 누락)')
         return
       }
-      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=talk_message`
+      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
       return
     }
 
