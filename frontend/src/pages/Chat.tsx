@@ -64,6 +64,19 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
     if (!text && attachedImages.length === 0 && attachedPdfs.length === 0) return
     if (streaming) return
 
+    const token = localStorage.getItem('token')
+    if (!token) {
+      // Trigger same login redirect as TopBar
+      const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
+      const REDIRECT_URI = `${window.location.origin}/auth/kakao`
+      if (!KAKAO_KEY) {
+        alert('로그인이 필요합니다. (API키 누락)')
+        return
+      }
+      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
+      return
+    }
+
     setStreaming(true)
     setAnalysisPreview(null)
 
