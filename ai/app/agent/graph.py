@@ -136,7 +136,7 @@ def crisis_check(state: AgentState):
             followup_prompt = ChatPromptTemplate.from_messages([
                 ("system", f"""이전에 사용자가 "{original_msg}"라고 했고, "지금 그거 진심이야?"라고 물었더니 아래처럼 답했다.
 이 답변이 자살/자해 의사를 긍정하는 건지 판단해. CRISIS 또는 SAFE로만 답해.
-애매하면 CRISIS로 판단해."""),
+애매하면 SAFE로 판단해."""),
                 ("user", "{input}"),
             ])
             chain = followup_prompt | llm_mini | StrOutputParser()
@@ -161,10 +161,12 @@ def crisis_check(state: AgentState):
 - 이런 표현이 불만, 짜증, 피곤, 스트레스 맥락에서 나오면 → SAFE
 
 SAFE (대부분 이쪽이다):
+- 일상적 도움 요청 ("도와줘", "나좀도와줘", "어떻게해", "힘들어", "지쳤어")
 - 욕설, 비속어, 분노 표현 ("뒤질래", "죽여버린다", "미치겠다")
 - 장난, 시비, 도발, 과장 표현
 - 일상적 불만, 짜증, 스트레스에서 나온 관용적 표현
 - 상대방에게 하는 말 ("뒤질래?", "죽을래?")
+- 자살/자해와 무관한 고민 상담 요청
 
 UNCLEAR (모호한 경우):
 - 위기 신호가 직접적이진 않지만 반복적 절망감이 느껴질 때
@@ -273,10 +275,10 @@ def execute_tools(state: AgentState):
         # LLM으로 검색이 필요한 키워드 추출
         extract_prompt = ChatPromptTemplate.from_messages([
             ("system", """사용자 메시지에서 실시간 정보나 최신 유행어 검색이 필요한 키워드를 추출해.
-- 모르는 단어, 유행어(예: 두쫀쿠, 슬릭백 등), 특정 브랜드명, 사건 사고, 논문/자료 링크 등.
-- 사용자 메시지 전체 맥락을 이해하는 데 필수적이거나 사용자가 링크/상세 정보를 요구할 때.
+- 모르는 단어, 유행어(예: 두쫀쿠, 슬릭백 등), 특정 브랜드명, 사건 사고, 논문/자료 링크, 도서 정보 등.
+- 사용자가 구체적인 정보(링크, 제목, 출처)를 요구하거나 실시간 확인이 필요한 모든 상황.
 - 검색할 게 없으면 "NONE"이라고만 답해.
-- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "상품평 텍스트 감성표현 연구 링크")"""),
+- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "자연어 처리 감성 분석 논문")"""),
             ("user", "{input}")
         ])
         extract_chain = extract_prompt | llm_mini | StrOutputParser()

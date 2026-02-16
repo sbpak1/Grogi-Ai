@@ -67,24 +67,31 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
     const kakaoUser = (await userRes.json()) as {
       id: number;
-      properties?: { nickname?: string };
+      properties?: { nickname?: string; profile_image?: string };
+      kakao_account?: { email?: string };
     };
 
     const kakaoId = String(kakaoUser.id);
     const nickname = kakaoUser.properties?.nickname ?? "사용자";
+    const profileImage = kakaoUser.properties?.profile_image;
+    const email = kakaoUser.kakao_account?.email;
 
-    // 3. DB upsert (있으면 닉네임 업데이트, 없으면 생성)
+    // 3. DB upsert (있으면 정보 업데이트, 없으면 생성)
     // 토큰도 같이 저장 (재로그인 시 갱신)
     const user = await prisma.user.upsert({
       where: { kakaoId },
       update: {
         nickname,
+        profileImage,
+        email,
         kakaoAccessToken: tokenData.access_token,
         kakaoRefreshToken: tokenData.refresh_token
       },
       create: {
         kakaoId,
         nickname,
+        profileImage,
+        email,
         kakaoAccessToken: tokenData.access_token,
         kakaoRefreshToken: tokenData.refresh_token
       },
@@ -97,7 +104,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
     res.json({
       token,
-      user: { id: user.id, kakao_id: user.kakaoId, nickname: user.nickname },
+      user: { id: user.id, kakao_id: user.kakaoId, nickname: user.nickname, profile_image: user.profileImage, email: user.email },
     });
   } catch (err) {
     console.error("카카오 로그인 실패:", err);
@@ -120,6 +127,8 @@ authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
     res.json({
       id: user.id,
       nickname: user.nickname,
+      email: user.email,
+      profileImage: user.profileImage,
       createdAt: user.createdAt,
     });
   } catch (err) {
@@ -127,6 +136,38 @@ authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
     res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 });
+// PATCH /api/auth/profile — 내 정보 업데이트
+authRouter.patch("/profile", authMiddleware, async (req: Request, res: Response) => {
+  const profileSchema = z.object({
+    nickname: z.string().optional(),
+    profileImage: z.string().url().optional().or(z.literal("")),
+    email: z.string().email().optional().or(z.literal("")),
+  });
+
+  const parsed = profileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "INVALID_REQUEST", details: parsed.error });
+    return;
+  }
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: parsed.data,
+    });
+
+    res.json({
+      id: user.id,
+      nickname: user.nickname,
+      email: user.email,
+      profileImage: user.profileImage,
+    });
+  } catch (err) {
+    console.error("프로필 업데이트 실패:", err);
+    res.status(500).json({ error: "UPDATE_FAILED" });
+  }
+});
+
 // POST /api/auth/dev-login — 개발용 즉시 로그인 (인가 코드 불필요)
 authRouter.post("/dev-login", async (_req: Request, res: Response) => {
   try {
