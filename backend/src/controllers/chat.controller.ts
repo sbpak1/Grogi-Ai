@@ -107,7 +107,7 @@ export const chatController = {
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);
-            res.status(500).json({ error: error.message || "message send failed" });
+            res.status(500).json({ error: "message send failed" });
         }
     },
 
