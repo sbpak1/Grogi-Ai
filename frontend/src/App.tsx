@@ -6,6 +6,7 @@ import TopBar from './components/TopBar'
 import { getSessions, getMe } from './api'
 
 export default function App() {
+  console.log('App Rendering... Current URL:', window.location.href);
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
@@ -13,21 +14,27 @@ export default function App() {
   const [profile, setProfile] = useState<{ nickname?: string; profileImage?: string; email?: string } | null>(null)
 
   useEffect(() => {
-    // Check for Kakao auth code in URL
+    console.log('App mounted. Processing URL search params...')
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
+
     if (code) {
-      window.history.replaceState({}, '', window.location.pathname)
+      console.log('Detection: Kakao code found!', code)
+      // Use clean URL for state replacement
+      window.history.replaceState({}, '', '/')
+
       import('./api').then(({ kakaoAuth }) => {
+        console.log('Calling kakaoAuth API...')
         kakaoAuth(code)
           .then((data) => {
+            console.log('Kakao login success:', data)
             if (data?.token) {
               localStorage.setItem('token', data.token)
               setToken(data.token)
             }
           })
           .catch((err) => {
-            console.error('Kakao login failed', err)
+            console.error('Kakao login API call failed:', err)
             alert('로그인에 실패했습니다.')
           })
       })
@@ -77,21 +84,7 @@ export default function App() {
     setCurrentSessionId(null)
   }
 
-  // 로그인 안 된 상태면 로그인 페이지
-  if (!token) {
-    return (
-      <div className="app">
-        <header>
-          <h1>Grogi</h1>
-        </header>
-        <main>
-          <Login onLogin={handleLogin} />
-        </main>
-      </div>
-    )
-  }
-
-  // 로그인 된 상태 → 바로 채팅 (Sidebar + TopBar 레이아웃)
+  // Render main layout (always accessible, login triggered via TopBar or when action required)
   return (
     <div className="app">
       <Sidebar
