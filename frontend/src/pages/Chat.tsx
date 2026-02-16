@@ -1,13 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { chatStream, createSession } from '../api'
+import { chatStream, createSession, getChatHistory } from '../api'
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
-export default function Chat() {
+interface ChatProps {
+  sessionId: string | null
+  onSessionStarted: (id: string) => void
+}
+
+export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<MessageItem[]>([])
   const [streaming, setStreaming] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
@@ -15,6 +19,28 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 세션 ID 변경 시 히스토리 로드
+  useEffect(() => {
+    if (sessionId) {
+      loadHistory(sessionId)
+    } else {
+      setMessages([])
+    }
+  }, [sessionId])
+
+  async function loadHistory(id: string) {
+    try {
+      const history = await getChatHistory(id)
+      setMessages(history.map((m: any) => ({
+        role: m.role,
+        content: m.content
+      })))
+      scrollToBottom()
+    } catch (err) {
+      console.error('Failed to load history', err)
+    }
+  }
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -56,15 +82,13 @@ export default function Chat() {
     scrollToBottom()
 
     try {
-      // 세션 없으면 자동 생성
       let currentSessionId = sessionId
       if (!currentSessionId) {
         const data = await createSession()
         currentSessionId = data.session_id
-        setSessionId(currentSessionId)
+        onSessionStarted(currentSessionId!)
       }
 
-      // AI 응답 자리 미리 추가
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
       scrollToBottom()
 
@@ -93,7 +117,6 @@ export default function Chat() {
                 scrollToBottom()
               }
             } catch {
-              // plain text
               setMessages((prev) => {
                 const copy = [...prev]
                 const last = copy[copy.length - 1]
@@ -145,8 +168,8 @@ export default function Chat() {
             setStreaming(false)
             const raw = err instanceof Error ? err.message : String(err ?? '')
             const userMessage = raw.includes('Incorrect API key')
-              ? 'AI 서버 API 키가 유효하지 않습니다. ai/.env 의 OPENAI_API_KEY를 확인하세요.'
-              : `연결 오류: ${raw || '알 수 없는 오류'}`
+              ? 'API 키 오류'
+              : `연결 오류: ${raw}`
             setMessages((prev) => [...prev, { role: 'system', content: userMessage }])
           },
         },
@@ -167,10 +190,6 @@ export default function Chat() {
         }
         reader.readAsDataURL(file)
       } else if (file.type === 'application/pdf') {
-        if (file.size > 10 * 1024 * 1024) {
-          alert('PDF 파일은 10MB 이하만 가능합니다')
-          return
-        }
         reader.onload = (e) => {
           const base64 = (e.target?.result as string).split(',')[1]
           setAttachedPdfs((prev) => [...prev, { name: file.name, base64 }])
@@ -186,102 +205,78 @@ export default function Chat() {
     }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    if (e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files)
-    }
-  }
-
-  const removeImage = (index: number) => {
-    setAttachedImages((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  function handleNewChat() {
-    setSessionId(null)
-    setMessages([])
-  }
-
   return (
-    <div className="chatPanel" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
-      <div className="chatHeader">
-        <h2>상담</h2>
-        <div style={{ marginLeft: 'auto' }} />
-        <button onClick={handleNewChat} className="newChatBtn">새 상담</button>
-      </div>
+    <>
+      <div className="chatWindowScroll" ref={chatWindowRef}>
 
-      <div className="chatWindow" ref={chatWindowRef}>
-        {messages.length === 0 && (
-          <div className="emptyChat">고민을 말해보세요. Grogi가 들어줄게요.</div>
-        )}
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            {m.role === 'system' && <span className="msgRole">시스템</span>}
-            <span className="msgContent">{m.content}</span>
+            <div className="msgIcon">
+              {/* Emoji removed */}
+            </div>
+            <div className="msgContent">{m.content}</div>
           </div>
         ))}
+
         {analysisPreview && streaming && (
           <div className="msg msg-system">
-            <span className="msgRole">분석</span>
-            <span className="msgContent" style={{ fontFamily: 'monospace' }}>{analysisPreview}</span>
+            <div className="msgContent" style={{ fontFamily: 'monospace', fontSize: '12px' }}>{analysisPreview}</div>
           </div>
         )}
         {streaming && <div className="msg msg-system">응답 중...</div>}
       </div>
 
-      <form onSubmit={handleSend} className="chatForm">
-        {(attachedImages.length > 0 || attachedPdfs.length > 0) && (
-          <div className="imagePreviewList">
-            {attachedImages.map((img, i) => (
-              <div key={`img-${i}`} className="previewItem">
-                <img src={`data:image/jpeg;base64,${img}`} alt="preview" />
-                <button type="button" className="removeImgBtn" onClick={() => removeImage(i)}>×</button>
-              </div>
-            ))}
-            {attachedPdfs.map((pdf, i) => (
-              <div key={`pdf-${i}`} className="pdfPreviewItem">
-                <span className="pdfIcon">PDF</span>
-                <span className="pdfName">{pdf.name}</span>
-                <button type="button" className="removeImgBtn" onClick={() => setAttachedPdfs(prev => prev.filter((_, idx) => idx !== i))}>×</button>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="inputArea">
+        <form onSubmit={handleSend} className="chatInputBox" onPaste={handlePaste} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); e.dataTransfer.files && processFiles(e.dataTransfer.files) }}>
+          {(attachedImages.length > 0 || attachedPdfs.length > 0) && (
+            <div className="previewBar">
+              {attachedImages.map((img, i) => (
+                <div key={i} className="previewThumb">
+                  <img src={`data:image/jpeg;base64,${img}`} alt="preview" />
+                  <button type="button" className="removeBtn" onClick={() => setAttachedImages(prev => prev.filter((_, idx) => idx !== i))}>×</button>
+                </div>
+              ))}
+              {attachedPdfs.map((pdf, i) => (
+                <div key={i} className="previewThumb pdfThumb">
+                  <div style={{ background: '#444', height: '100%', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>PDF</div>
+                  <button type="button" className="removeBtn" onClick={() => setAttachedPdfs(prev => prev.filter((_, idx) => idx !== i))}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
 
-        <div className="chatInputWrapper">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onPaste={handlePaste}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder="메시지를 입력하거나 이미지를 붙여넣으세요..."
-            disabled={streaming}
-            rows={1}
-          />
-          <div className="btnGroup">
-            <input
-              type="file"
-              accept="image/*,application/pdf"
-              multiple
-              ref={fileInputRef}
-              onChange={(e) => e.target.files && processFiles(e.target.files)}
-              style={{ display: 'none' }}
+          <div className="inputRow">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend()
+                }
+              }}
+              placeholder="여기에 도움말 입력"
+              rows={1}
             />
-            <button type="button" className="iconBtn" onClick={() => fileInputRef.current?.click()} disabled={streaming}>
-              📷
-            </button>
-            <button type="submit" className="submitBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0 && attachedPdfs.length === 0)}>
-              전송
-            </button>
           </div>
-        </div>
-      </form>
-    </div>
+
+          <div className="inputActions">
+            <div className="leftActions">
+              <button type="button" className="roundBtn" onClick={() => fileInputRef.current?.click()} title="이미지 업로드">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" /></svg>
+              </button>
+              <input type="file" multiple ref={fileInputRef} hidden onChange={(e) => e.target.files && processFiles(e.target.files)} />
+            </div>
+
+            <div className="rightActions">
+              <button type="submit" className="roundBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0)} title="전송">
+                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </>
   )
 }
