@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
 const api = axios.create({ baseURL: API_BASE })
 
 api.interceptors.request.use((config) => {
