@@ -169,8 +169,16 @@ export const chatService = {
                 persist: true,
             } as ChatSessionContext;
         } catch (error: any) {
-            if (!isPrismaUnavailableError(error)) throw error;
-            console.warn("[chatService] DB unavailable. Falling back to non-persistent session mode.");
+            const unavailable = isPrismaUnavailableError(error);
+            const userMissing = error.code === "P2003" && error.meta?.modelName === "Session";
+
+            if (!unavailable && !userMissing) throw error;
+
+            if (userMissing) {
+                console.warn(`[chatService] User ${userId} not found in DB for session ${sessionId}. Falling back to non-persistent session mode.`);
+            } else {
+                console.warn("[chatService] DB unavailable. Falling back to non-persistent session mode.");
+            }
             return toMockContext(getOrCreateMockSession(sessionId));
         }
     },
