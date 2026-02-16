@@ -136,7 +136,7 @@ def crisis_check(state: AgentState):
             followup_prompt = ChatPromptTemplate.from_messages([
                 ("system", f"""이전에 사용자가 "{original_msg}"라고 했고, "지금 그거 진심이야?"라고 물었더니 아래처럼 답했다.
 이 답변이 자살/자해 의사를 긍정하는 건지 판단해. CRISIS 또는 SAFE로만 답해.
-애매하면 CRISIS로 판단해."""),
+애매하면 SAFE로 판단해."""),
                 ("user", "{input}"),
             ])
             chain = followup_prompt | llm_mini | StrOutputParser()
@@ -161,10 +161,12 @@ def crisis_check(state: AgentState):
 - 이런 표현이 불만, 짜증, 피곤, 스트레스 맥락에서 나오면 → SAFE
 
 SAFE (대부분 이쪽이다):
+- 일상적 도움 요청 ("도와줘", "나좀도와줘", "어떻게해", "힘들어", "지쳤어")
 - 욕설, 비속어, 분노 표현 ("뒤질래", "죽여버린다", "미치겠다")
 - 장난, 시비, 도발, 과장 표현
 - 일상적 불만, 짜증, 스트레스에서 나온 관용적 표현
 - 상대방에게 하는 말 ("뒤질래?", "죽을래?")
+- 자살/자해와 무관한 고민 상담 요청
 
 UNCLEAR (모호한 경우):
 - 위기 신호가 직접적이진 않지만 반복적 절망감이 느껴질 때

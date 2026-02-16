@@ -124,8 +124,11 @@ export default function Chat() {
             scrollToBottom()
           },
           onCrisis(data) {
-            const hotlines = data.hotlines?.join(', ') || ''
-            const crisisMsg = `${data.message}\n\n${hotlines}`
+            const hotlines = data.hotlines?.map((h: any) =>
+              typeof h === 'string' ? h : `${h.name}: ${h.number} (${h.desc})`
+            ).join('\n') || ''
+            const followUp = data.follow_up ? `\n\n${data.follow_up}` : ''
+            const crisisMsg = `${data.message}\n\n${hotlines}${followUp}`
             setMessages((prev) => {
               const copy = [...prev]
               const last = copy[copy.length - 1]
