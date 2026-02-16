@@ -16,25 +16,15 @@ if (!isLocal && (!API_BASE || API_BASE.includes('localhost'))) {
 
 const api = axios.create({ baseURL: API_BASE })
 
-console.log(`[API] Configuration - Hostname: ${window.location.hostname}, API_BASE: ${API_BASE}`);
-
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token')
   if (token) config.headers.Authorization = `Bearer ${token}`
-  console.log(`[API] Request: ${config.method?.toUpperCase()} ${config.url}`, config.data || '');
   return config
 })
 
 export async function kakaoAuth(code: string, redirectUri?: string) {
-  console.log(`[Auth] Starting Kakao Exchange. Code: ${code.substring(0, 10)}..., Redirect: ${redirectUri}`);
-  try {
-    const res = await api.post('/api/auth/kakao', { code, redirectUri })
-    console.log('[Auth] Success:', res.data.user?.nickname);
-    return res.data
-  } catch (err: any) {
-    console.error('[Auth] Failed:', err.response?.data || err.message);
-    throw err
-  }
+  const res = await api.post('/api/auth/kakao', { code, redirectUri })
+  return res.data
 }
 
 export async function devLogin() {
@@ -133,8 +123,6 @@ export function chatStream(
     handlers.onDone?.()
   }
 
-  console.log(`[Stream] Connecting to: ${API_BASE}/api/chat`, { sessionId: normalizedPayload.sessionId, privateMode: normalizedPayload.privateMode });
-
   return fetchEventSource(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: {
@@ -143,7 +131,6 @@ export function chatStream(
     },
     body: JSON.stringify(normalizedPayload),
     async onopen(response) {
-      console.log(`[Stream] Opened. Status: ${response.status} ${response.statusText}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
     },
     onmessage(ev) {
