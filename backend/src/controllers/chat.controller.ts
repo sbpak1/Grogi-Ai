@@ -4,6 +4,28 @@ import { chatService } from "../services/chat.service";
 export const chatController = {
     async send(req: Request, res: Response) {
         const { sessionId, message, images, ocr_text, pdfs } = req.body;
+
+        if (images && images.length > 5) {
+            res.status(400).json({ error: "이미지는 최대 5장까지 가능합니다" });
+            return;
+        }
+        if (pdfs && pdfs.length > 3) {
+            res.status(400).json({ error: "PDF는 최대 3개까지 가능합니다" });
+            return;
+        }
+        if (pdfs) {
+            for (const pdf of pdfs) {
+                if (pdf.content && pdf.content.length > 14 * 1024 * 1024) {
+                    res.status(400).json({ error: "PDF 파일은 10MB 이하만 가능합니다" });
+                    return;
+                }
+            }
+        }
+        if (message && message.length > 5000) {
+            res.status(400).json({ error: "메시지는 5000자 이하만 가능합니다" });
+            return;
+        }
+
         const resolvedSessionId =
             typeof sessionId === "string" && sessionId.trim()
                 ? sessionId.trim()
