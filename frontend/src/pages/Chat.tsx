@@ -1,5 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { chatStream, createSession, getChatHistory } from '../api'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -217,7 +220,16 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
             <div className="msgIcon">
               {/* Emoji removed */}
             </div>
-            <div className="msgContent">{m.content}</div>
+            <div className="msgContent">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+                components={{
+                  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />
+                }}
+              >
+                {m.content}
+              </ReactMarkdown>
+            </div>
           </div>
         ))}
 
