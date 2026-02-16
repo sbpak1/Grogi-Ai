@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import Chat from './pages/Chat'
-import Login from './pages/Login'
+// import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import { getSessions, getMe } from './api'
@@ -11,6 +11,28 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<any[]>([])
   const [profile, setProfile] = useState<{ nickname?: string; profileImage?: string; email?: string } | null>(null)
+
+  useEffect(() => {
+    // Check for Kakao auth code in URL
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      window.history.replaceState({}, '', window.location.pathname)
+      import('./api').then(({ kakaoAuth }) => {
+        kakaoAuth(code)
+          .then((data) => {
+            if (data?.token) {
+              localStorage.setItem('token', data.token)
+              setToken(data.token)
+            }
+          })
+          .catch((err) => {
+            console.error('Kakao login failed', err)
+            alert('로그인에 실패했습니다.')
+          })
+      })
+    }
+  }, [])
 
   useEffect(() => {
     if (token) {
