@@ -205,7 +205,7 @@ export const chatService = {
 
     async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any) {
         try {
-            return await prisma.message.create({
+            const message = await prisma.message.create({
                 data: {
                     sessionId,
                     role,
@@ -214,6 +214,34 @@ export const chatService = {
                     scoreBreakdown,
                 },
             });
+
+            // 첫 번째 사용자 메시지인 경우 세션 제목 업데이트 (LLM 기반)
+            if (role === "user") {
+                const messageCount = await prisma.message.count({ where: { sessionId } });
+                if (messageCount === 1) {
+                    // AI 서버에 제목 생성 요청
+                    const aiBaseUrl = env.AI_SERVER_URL.replace(/\/+$/, "");
+                    try {
+                        const titleRes = await axios.post(`${aiBaseUrl}/agent/title`, { message: content });
+                        const llmTitle = titleRes.data?.title;
+                        if (llmTitle) {
+                            await prisma.session.update({
+                                where: { id: sessionId },
+                                data: { title: llmTitle },
+                            });
+                        }
+                    } catch (err) {
+                        console.error("Failed to generate LLM title, falling back to slice:", err);
+                        const fallbackTitle = content.length > 20 ? content.substring(0, 20) + "..." : content;
+                        await prisma.session.update({
+                            where: { id: sessionId },
+                            data: { title: fallbackTitle },
+                        }).catch(e => console.error("Fallback title update failed:", e));
+                    }
+                }
+            }
+
+            return message;
         } catch (error: any) {
             if (isMessageSessionForeignKeyError(error)) {
                 console.warn(`[chatService] Session ${sessionId} is not persisted. Saving message to in-memory fallback.`);

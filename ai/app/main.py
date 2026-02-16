@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.agent.graph import build_graph
+from app.agent.graph import build_graph, llm_mini
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 app = FastAPI(title="Grogi AI Agent Server")
 
@@ -53,6 +55,10 @@ class ChatRequest(BaseModel):
     images: Optional[List[str]] = None
     ocr_text: Optional[str] = None
     pdfs: Optional[List[PdfAttachment]] = None
+
+
+class TitleRequest(BaseModel):
+    message: str
 
 
 @app.get("/agent/health")
@@ -215,6 +221,25 @@ async def real_agent_generator(request: ChatRequest):
 @app.post("/agent/chat")
 async def chat_endpoint(request: ChatRequest):
     return EventSourceResponse(real_agent_generator(request))
+
+
+@app.post("/agent/title")
+async def title_endpoint(request: TitleRequest):
+    try:
+        title_prompt = ChatPromptTemplate.from_messages([
+            ("system", """사용자의 첫 메시지를 보고 대화방의 제목을 창의적으로 지어줘.
+- 결과는 15자 이내로 짧고 강렬하게.
+- 이모지는 절대 쓰지마. 문장으로만 작성해
+- 조사나 불필요한 단어는 빼고 핵심만. (예: "에너지 드링크 과유불급", "카페인 중독 경고")
+- 제목만 딱 답해."""),
+            ("user", "{input}")
+        ])
+        chain = title_prompt | llm_mini | StrOutputParser()
+        title = await chain.ainvoke({"input": request.message})
+        return {"title": title.strip()}
+    except Exception as e:
+        print(f"Title generation error: {e}")
+        return {"title": request.message[:15] + "..."}
 
 
 if __name__ == "__main__":

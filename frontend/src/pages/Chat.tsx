@@ -18,6 +18,7 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
+  const justStartedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
@@ -26,6 +27,11 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
     if (sessionId) {
+      // 새로 시작된 세션인 경우 히스토리 로드를 건너뜀 (이미 optimistic하게 메시지가 채워짐)
+      if (justStartedRef.current) {
+        justStartedRef.current = false
+        return
+      }
       loadHistory(sessionId)
     } else {
       setMessages([])
@@ -35,7 +41,8 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
   async function loadHistory(id: string) {
     try {
       const history = await getChatHistory(id)
-      setMessages(history.map((m: any) => ({
+      const messageList = Array.isArray(history) ? history : (history.messages || [])
+      setMessages(messageList.map((m: any) => ({
         role: m.role,
         content: m.content
       })))
@@ -102,6 +109,7 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
       if (!currentSessionId) {
         const data = await createSession()
         currentSessionId = data.session_id
+        justStartedRef.current = true // 플래그 설정
         onSessionStarted(currentSessionId!)
       }
 
@@ -181,6 +189,10 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
           onDone() {
             setAnalysisPreview(null)
             setStreaming(false)
+            // 첫 메시지거나 세션이 시작된 경우 사이드바 갱신 유도 (currentSessionId 사용으로 클로저 문제 해결)
+            if (currentSessionId) {
+              onSessionStarted(currentSessionId)
+            }
           },
           onError(err) {
             setAnalysisPreview(null)
