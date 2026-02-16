@@ -2,6 +2,25 @@ import React from 'react'
 import { kakaoAuth } from '../api'
 
 export default function Login({ onLogin }: { onLogin?: () => void }) {
+  // Check for Kakao auth code in URL on mount
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    if (code) {
+      // Clear code from URL to prevent re-submission on refresh and clean up path
+      window.history.replaceState({}, '', '/')
+
+      kakaoAuth(code)
+        .then((data) => {
+          if (data?.token) {
+            localStorage.setItem('token', data.token)
+            onLogin && onLogin()
+          }
+        })
+        .catch(() => alert('Kakao login failed'))
+    }
+  }, [onLogin])
+
   async function handleKakaoCodeSubmit(e: React.FormEvent) {
     e.preventDefault()
     const form = e.target as HTMLFormElement
@@ -16,12 +35,26 @@ export default function Login({ onLogin }: { onLogin?: () => void }) {
   }
 
   function openKakaoSDK() {
-    // If Kakao JS SDK is loaded on page, call authorize. Designer will integrate
-    if ((window as any).Kakao && (window as any).Kakao.Auth) {
-      ; (window as any).Kakao.Auth.authorize()
+    const w = window as any
+    const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
+
+    if (!w.Kakao || !w.Kakao.Auth) {
+      alert('Kakao SDK not found — check script load / SRI / adblock')
       return
     }
-    alert('Kakao SDK not found — paste auth code below for now')
+
+    if (!KAKAO_KEY) {
+      alert('VITE_KAKAO_JS_KEY is missing')
+      return
+    }
+
+    if (!w.Kakao.isInitialized()) {
+      w.Kakao.init(KAKAO_KEY)
+    }
+
+    w.Kakao.Auth.authorize({
+      redirectUri: `${window.location.origin}/auth/kakao`,
+    })
   }
 
   return (

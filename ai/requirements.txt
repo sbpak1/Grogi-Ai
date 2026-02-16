@@ -16,3 +16,8 @@ langchain-anthropic
 langchain-google-genai
 pypdf
 pymupdf
+tavily-python
+pydantic-settings
+langsmith
+langgraph-checkpoint
+langgraph-prebuilt
