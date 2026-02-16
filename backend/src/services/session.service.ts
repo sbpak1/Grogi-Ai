@@ -39,16 +39,11 @@ export const sessionService = {
             if (!unavailable && !userMissing) throw error;
 
             if (userMissing) {
-                console.warn(`[sessionService] User ${userId} not found in DB. Using mock session.`);
+                console.error(`[sessionService] User ${userId} not found in DB.`);
             } else {
-                console.warn("[sessionService] DB unavailable. Using mock session.");
+                console.error("[sessionService] DB unavailable.");
             }
-
-            return {
-                id: `mock-session-${Date.now()}`,
-                ...data,
-                createdAt: new Date(),
-            };
+            throw error;
         }
     },
 
