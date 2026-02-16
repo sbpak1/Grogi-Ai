@@ -76,7 +76,7 @@ export function chatStream(
     onMeta?: (text: string) => void;
     onScore?: (score: any) => void;
     onShareCard?: (card: any) => void;
-    onCrisis?: (data: { message: string; hotlines: string[] }) => void;
+    onCrisis?: (data: { message: string; hotlines: any[]; follow_up?: string }) => void;
   }
 ) {
   const token = localStorage.getItem('token')
