@@ -222,3 +222,13 @@ export function chatStream(
     },
   })
 }
+// 캘린더 일정 등록 테스트용
+export async function createCalendarEvent(event: { title: string, startAt: string, endAt: string, description?: string }) {
+  const res = await api.post('/api/calendar/events', event);
+  return res.data;
+}
+// 카카오 나에게 메시지 보내기 테스트용
+export async function sendSelfMessage(text: string) {
+  const res = await api.post('/api/message/send', { text });
+  return res.data;
+}
