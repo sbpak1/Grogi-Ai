@@ -44,17 +44,17 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
 
     function triggerLogin() {
         const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-        const w = window as any
-        if (w.Kakao && !w.Kakao.isInitialized()) w.Kakao.init(KAKAO_KEY)
+        const REDIRECT_URI = `${window.location.origin}/auth/kakao`
 
-        if (w.Kakao) {
-            w.Kakao.Auth.authorize({
-                redirectUri: `${window.location.origin}/auth/kakao`,
-            })
-        } else {
-            const redirect = `${window.location.origin}/auth/kakao`
-            window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${import.meta.env.VITE_KAKAO_CLIENT_ID}&redirect_uri=${redirect}&response_type=code`
+        if (!KAKAO_KEY) {
+            alert('VITE_KAKAO_JS_KEY is missing')
+            return
         }
+
+        // Direct redirection to Kakao Auth URL (REST API method)
+        const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=talk_message`
+
+        window.location.href = KAKAO_AUTH_URL
     }
 
     const defaultAvatar = "https://lh3.googleusercontent.com/a/default-user=s64"
@@ -68,11 +68,12 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
             <div className="topBarActions">
                 <div className="userProfile">
                     {isGuest ? (
-                        <button className="loginBtn" onClick={triggerLogin} title="로그인">
-                            <svg viewBox="0 0 24 24" width="24" height="24">
-                                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-15c-1.93 0-3.5 1.57-3.5 3.5S10.07 12 12 12s3.5-1.57 3.5-3.5S13.93 5 12 5zm0 5c-.83 0-1.5-.67-1.5-1.5S11.17 7 12 7s1.5.67 1.5 1.5S12.83 10 12 10zm0 3c-2.33 0-7 1.17-7 3.5V18h14v-1.5c0-2.33-4.67-3.5-7-3.5z" />
-                            </svg>
-                            <span style={{ marginLeft: '8px' }}>로그인</span>
+                        <button className="avatarBtn" onClick={triggerLogin} title="로그인">
+                            <img
+                                src={defaultAvatar}
+                                alt="guest"
+                                style={{ borderRadius: '50%', width: '32px', height: '32px', filter: 'grayscale(100%)' }}
+                            />
                         </button>
                     ) : (
                         <button className="avatarBtn" onClick={() => setIsPopoverOpen(!isPopoverOpen)} title="프로필">
