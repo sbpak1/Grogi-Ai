@@ -13,9 +13,21 @@ from app.agent.graph import build_graph
 
 app = FastAPI(title="Grogi AI Agent Server")
 
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://grogi.store",
+    "https://www.grogi.store",
+    "https://api.grogi.store",
+]
+if os.getenv("FRONTEND_URL"):
+    ALLOWED_ORIGINS.append(os.getenv("FRONTEND_URL"))
+if os.getenv("BACKEND_URL"):
+    ALLOWED_ORIGINS.append(os.getenv("BACKEND_URL"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
