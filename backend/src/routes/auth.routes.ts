@@ -22,6 +22,7 @@ export const authRouter = Router();
 
 const kakaoBodySchema = z.object({
   code: z.string(),
+  redirectUri: z.string().url().optional(),
 });
 
 // POST /api/auth/kakao — 카카오 인가 코드로 로그인
@@ -32,7 +33,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     return;
   }
 
-  const { code } = parsed.data;
+  const { code, redirectUri } = parsed.data;
 
   try {
     // 1. 카카오 토큰 교환
@@ -41,7 +42,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
       grant_type: "authorization_code",
       client_id: env.KAKAO_CLIENT_ID,
       client_secret: env.KAKAO_CLIENT_SECRET,
-      redirect_uri: env.KAKAO_REDIRECT_URI,
+      redirect_uri: redirectUri || env.KAKAO_REDIRECT_URI,
       code,
     });
     console.log("토큰 요청 파라미터:", params.toString());

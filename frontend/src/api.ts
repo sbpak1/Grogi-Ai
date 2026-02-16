@@ -1,7 +1,11 @@
 import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_API_URL
+  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
+  : (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3000'
+    : '')
 const api = axios.create({ baseURL: API_BASE })
 
 api.interceptors.request.use((config) => {
@@ -10,8 +14,8 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-export async function kakaoAuth(code: string) {
-  const res = await api.post('/api/auth/kakao', { code })
+export async function kakaoAuth(code: string, redirectUri?: string) {
+  const res = await api.post('/api/auth/kakao', { code, redirectUri })
   return res.data
 }
 
