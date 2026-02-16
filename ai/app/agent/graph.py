@@ -42,7 +42,7 @@ class AgentState(TypedDict):
 AI_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(dotenv_path=AI_ROOT / ".env", override=True)
 
-llm_haiku = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0.3)
+llm_haiku = ChatAnthropic(model="claude-3-haiku-20240307", temperature=0.3)
 llm_gemini = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
 
 # 현재 사용 중: gemini (haiku로 바꾸려면 llm = llm_haiku)
@@ -249,26 +249,35 @@ def select_tools(state: AgentState):
 
 def execute_tools(state: AgentState):
     search_tool = get_search_tool()
-    search_results = ""
+    search_results = "검색 결과 없음"
 
     if search_tool:
         # LLM으로 검색이 필요한 키워드 추출
         extract_prompt = ChatPromptTemplate.from_messages([
-            ("system", """사용자 메시지에서 검색이 필요한 키워드를 추출해.
-- 모르는 단어, 브랜드명, 제품명, 유행어, 사건 등 검색해야 이해할 수 있는 것만.
-- 일상 대화에서 누구나 아는 단어는 제외.
+            ("system", """사용자 메시지에서 실시간 정보나 최신 유행어 검색이 필요한 키워드를 추출해.
+- 모르는 단어, 유행어(예: 두쫀쿠, 슬릭백 등), 특정 브랜드명, 사건 사고, 논문/자료 링크 등.
+- 사용자 메시지 전체 맥락을 이해하는 데 필수적이거나 사용자가 링크/상세 정보를 요구할 때.
 - 검색할 게 없으면 "NONE"이라고만 답해.
-- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "두쫀쿠 과자")"""),
+- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "상품평 텍스트 감성표현 연구 링크")"""),
             ("user", "{input}")
         ])
         extract_chain = extract_prompt | llm_mini | StrOutputParser()
         search_query = extract_chain.invoke({"input": state["user_message"]}).strip()
 
         if search_query and search_query.upper() != "NONE":
+            print(f"[Search] Query extracted: {search_query}")
             try:
+                # 쿼리에 "뜻"이나 "의미"를 추가하여 더 정확한 정의를 유도
+                if len(search_query.split()) == 1 and not any(kw in search_query for kw in ["뜻", "의미", "뭐야"]):
+                    search_query += " 뜻 의미"
+                
                 results = search_tool.invoke({"query": search_query})
-                search_results = str(results)
+                if results:
+                    search_results = str(results)
+                else:
+                    search_results = f"'{search_query}'에 대한 검색 결과가 없습니다."
             except Exception as e:
+                print(f"[Search Error] {e}")
                 search_results = f"검색 중 오류 발생: {str(e)}"
 
     return {"factcheck": search_results, "status": "executing_tools"}
@@ -296,12 +305,13 @@ def generate_response(state: AgentState):
 2. 서술형 금지. 카톡 말투로.
 3. 매번 해결책 던지지 마. 대화하듯이 티키타카 해. 상황 파악 먼저.
 4. 해결책은 문제 파악 됐을 때만. A안 B안 형식 금지. 대화체로 자연스럽게.
-5. JSON, 코드블록, 마크다운 쓰지 마.
-6. 이미지 분석 결과 있으면 자연스럽게 녹여서.
-7. 문서 내용이 제공되면 "뭘 분석해?" 같은 되물음 없이 바로 비평 시작해. 문서를 읽었으니까 내용에 대해 바로 말해.
-8. 문서 비평할 때도 한꺼번에 다 쏟지 말고 핵심부터 하나씩.
-9. 문서에 실제로 있는 내용만 언급해. 없는 페이지, 없는 텍스트를 지어내면 안 됨. 확인 안 된 건 말하지 마.
-10. "두 번 말했네", "또 같은 말 하네" 절대 쓰지 마. 사용자는 반복한 적 없다.
+5. 실시간 검색 기능을 적극적으로 사용하여 사용자에게 객관적으로 유용한 정보나 링크를 제공해라. 너는 실시간 검색이 가능하며, 사용자에게 검색 결과를 바로 전달해줄 수 있다. "실시간 검색이 안 된다"는 말은 절대 하지 마.
+6. JSON, 코드블록, 마크다운(링크 제외) 쓰지 마.
+7. 이미지 분석 결과 있으면 자연스럽게 녹여서.
+8. 문서 내용이 제공되면 "뭘 분석해?" 같은 되물음 없이 바로 비평 시작해. 문서를 읽었으니까 내용에 대해 바로 말해.
+9. 문서 비평할 때도 한꺼번에 다 쏟지 말고 핵심부터 하나씩.
+10. 문서에 실제로 있는 내용만 언급해. 없는 페이지, 없는 텍스트를 지어내면 안 됨. 확인 안 된 건 말하지 마.
+11. "두 번 말했네", "또 같은 말 하네" 절대 쓰지 마. 사용자는 반복한 적 없다.
 """
 
     messages = [SystemMessage(content=full_system_prompt)]
