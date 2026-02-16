@@ -1,5 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { chatStream, createSession, getChatHistory } from '../api'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkBreaks from 'remark-breaks'
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -60,6 +63,19 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
     const text = input.trim()
     if (!text && attachedImages.length === 0 && attachedPdfs.length === 0) return
     if (streaming) return
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      // Trigger same login redirect as TopBar
+      const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
+      const REDIRECT_URI = `${window.location.origin}/auth/kakao`
+      if (!KAKAO_KEY) {
+        alert('로그인이 필요합니다. (API키 누락)')
+        return
+      }
+      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
+      return
+    }
 
     setStreaming(true)
     setAnalysisPreview(null)
@@ -217,7 +233,16 @@ export default function Chat({ sessionId, onSessionStarted }: ChatProps) {
             <div className="msgIcon">
               {/* Emoji removed */}
             </div>
-            <div className="msgContent">{m.content}</div>
+            <div className="msgContent">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkBreaks]}
+                components={{
+                  a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />
+                }}
+              >
+                {m.content}
+              </ReactMarkdown>
+            </div>
           </div>
         ))}
 

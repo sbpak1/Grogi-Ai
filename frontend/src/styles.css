@@ -279,7 +279,36 @@ body {
 .msgContent {
   max-width: 85%;
   font-size: 16px;
-  word-break: break-all;
+  word-break: break-word;
+}
+
+.msgContent p {
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.msgContent p:last-child {
+  margin-bottom: 0;
+}
+
+.msgContent a {
+  color: #8ab4f8;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.msgContent a:hover {
+  text-decoration: underline;
+}
+
+.msgContent ul,
+.msgContent ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.msgContent li {
+  margin-bottom: 4px;
 }
 
 .msg-user .msgContent {

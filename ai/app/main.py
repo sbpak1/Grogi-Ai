@@ -131,10 +131,16 @@ async def real_agent_generator(request: ChatRequest):
                 content = _extract_text(getattr(chunk, "content", ""))
                 if content:
                     sent_content = True
-                    yield {"event": "token", "data": json.dumps({"content": content})}
+                    yield {"event": "token", "data": json.dumps({"content": content}, ensure_ascii=False)}
 
             elif kind == "on_chain_end":
                 node_name = event.get("name")
+
+                # LangGraph 노드 종료 이벤트만 처리 (metadata에 langgraph_node가 있는 경우)
+                if event.get("metadata", {}).get("langgraph_node") != node_name:
+                    # 노드 자체가 아닌 내부 체인 종료는 무시
+                    if node_name != "generate_response":
+                        continue
 
                 if node_name == "crisis_check":
                     res = event["data"]["output"]
@@ -156,7 +162,7 @@ async def real_agent_generator(request: ChatRequest):
                                     {"name": "긴급복지", "number": "129", "desc": "복지 지원 연결"},
                                 ],
                                 "follow_up": "전화가 부담되면 카카오톡에서 '마음이음'검색해봐. 채팅 상담도 돼.",
-                            }),
+                            }, ensure_ascii=False),
                         }
                         yield {"event": "done", "data": "{}"}
                         return
@@ -169,7 +175,7 @@ async def real_agent_generator(request: ChatRequest):
                                     "야 잠만.\n"
                                     "지금 그거 진심이야?"
                                 ),
-                            }),
+                            }, ensure_ascii=False),
                         }
                         yield {"event": "done", "data": "{}"}
                         return
@@ -177,23 +183,25 @@ async def real_agent_generator(request: ChatRequest):
                 elif node_name == "execute_tools":
                     yield {
                         "event": "status",
-                        "data": json.dumps({"step": "searching", "detail": "실시간 데이터 검색 및 팩트 체크 완료"}),
+                        "data": json.dumps({"step": "searching", "detail": "실시간 데이터 검색 및 팩트 체크 완료"}, ensure_ascii=False),
                     }
 
                 elif node_name == "generate_response":
+                    if sent_content:
+                        continue # 이미 스트리밍으로 보냄
+                    
                     final_result = event["data"]["output"]
-                    # 텍스트 생성 결과 (이미 스트리밍으로 전송되었을 수 있음)
                     raw_text = final_result.get("diagnosis") or final_result.get("content") or ""
                     normalized_text = _extract_text(raw_text)
                     
-                    if normalized_text.strip() and not sent_content:
+                    if normalized_text.strip():
                         sent_content = True
-                        yield {"event": "token", "data": json.dumps({"content": normalized_text})}
+                        yield {"event": "token", "data": json.dumps({"content": normalized_text}, ensure_ascii=False)}
 
                 elif node_name == "calculate_score":
                     final_result = event["data"]["output"]
-                    yield {"event": "score", "data": json.dumps(final_result.get("reality_score", {}))}
-                    yield {"event": "share_card", "data": json.dumps(final_result.get("share_card", {}))}
+                    yield {"event": "score", "data": json.dumps(final_result.get("reality_score", {}), ensure_ascii=False)}
+                    yield {"event": "share_card", "data": json.dumps(final_result.get("share_card", {}), ensure_ascii=False)}
 
             if kind == "on_chat_model_start" and _is_generate_response_event(event):
                 yield {"event": "section", "data": json.dumps({"type": "diagnosis"})}

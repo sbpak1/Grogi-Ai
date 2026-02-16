@@ -36,24 +36,31 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
   try {
     // 1. 카카오 토큰 교환
+    console.log("카카오 토큰 교환 시작. code:", code);
+    const params = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: env.KAKAO_CLIENT_ID,
+      client_secret: env.KAKAO_CLIENT_SECRET,
+      redirect_uri: env.KAKAO_REDIRECT_URI,
+      code,
+    });
+    console.log("토큰 요청 파라미터:", params.toString());
+
     const tokenRes = await fetch("https://kauth.kakao.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        client_id: env.KAKAO_CLIENT_ID,
-        client_secret: env.KAKAO_CLIENT_SECRET,
-        redirect_uri: env.KAKAO_REDIRECT_URI,
-        code,
-      }),
+      body: params,
     });
 
     if (!tokenRes.ok) {
-      res.status(401).json({ error: "INVALID_CODE" });
+      const errorText = await tokenRes.text();
+      console.error("카카오 토큰 교환 실패. 상태:", tokenRes.status, "응답:", errorText);
+      res.status(401).json({ error: "INVALID_CODE", details: errorText });
       return;
     }
 
-    const tokenData = (await tokenRes.json()) as { access_token: string };
+    const tokenData = (await tokenRes.json()) as { access_token: string; refresh_token?: string };
+    console.log("카카오 토큰 데이터 수신 완료.");
 
     // 2. 카카오 사용자 정보 조회
     const userRes = await fetch("https://kapi.kakao.com/v2/user/me", {
@@ -61,27 +68,60 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     });
 
     if (!userRes.ok) {
-      res.status(401).json({ error: "KAKAO_USER_FETCH_FAILED" });
+      const errorText = await userRes.text();
+      console.error("카카오 유저 정보 조회 실패. 상태:", userRes.status, "응답:", errorText);
+      res.status(401).json({ error: "KAKAO_USER_FETCH_FAILED", details: errorText });
       return;
     }
 
     const kakaoUser = (await userRes.json()) as {
       id: number;
       properties?: { nickname?: string; profile_image?: string };
-      kakao_account?: { email?: string };
+      kakao_account?: {
+        email?: string;
+        profile?: {
+          nickname?: string;
+          profile_image_url?: string;
+          thumbnail_image_url?: string;
+        }
+      };
     };
+    console.log("카카오 유저 데이터 수신:", JSON.stringify(kakaoUser));
 
     const kakaoId = String(kakaoUser.id);
-    const nickname = kakaoUser.properties?.nickname ?? "사용자";
-    const profileImage = kakaoUser.properties?.profile_image;
+    const nickname = kakaoUser.properties?.nickname ?? kakaoUser.kakao_account?.profile?.nickname ?? "사용자";
+
+    // Check multiple locations for profile image
+    const profileImage =
+      kakaoUser.properties?.profile_image ??
+      kakaoUser.kakao_account?.profile?.profile_image_url ??
+      kakaoUser.kakao_account?.profile?.thumbnail_image_url;
+
     const email = kakaoUser.kakao_account?.email;
 
+    console.log(`[AUTH] Extracted Data - kakaoId: ${kakaoId}, nickname: ${nickname}, profileImage: ${profileImage}, email: ${email}`);
+
     // 3. DB upsert (있으면 정보 업데이트, 없으면 생성)
+    console.log(`[AUTH] Upserting user for kakaoId: ${kakaoId}, nickname: ${nickname}`);
     const user = await prisma.user.upsert({
       where: { kakaoId },
-      update: { nickname, profileImage, email },
-      create: { kakaoId, nickname, profileImage, email },
+      update: {
+        nickname,
+        profileImage,
+        email,
+        kakaoAccessToken: tokenData.access_token,
+        kakaoRefreshToken: tokenData.refresh_token
+      },
+      create: {
+        kakaoId,
+        nickname,
+        profileImage,
+        email,
+        kakaoAccessToken: tokenData.access_token,
+        kakaoRefreshToken: tokenData.refresh_token
+      },
     });
+    console.log(`[AUTH] User session created: userId=${user.id} for kakaoId=${kakaoId}`);
 
     // 4. JWT 발급 (24시간)
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {
@@ -93,8 +133,8 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
       user: { id: user.id, kakao_id: user.kakaoId, nickname: user.nickname, profile_image: user.profileImage, email: user.email },
     });
   } catch (err) {
-    console.error("카카오 로그인 실패:", err);
-    res.status(500).json({ error: "AUTH_FAILED" });
+    console.error("카카오 로그인 치명적 실패:", err);
+    res.status(500).json({ error: "AUTH_FAILED", message: err instanceof Error ? err.message : String(err) });
   }
 });
 

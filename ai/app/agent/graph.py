@@ -303,7 +303,7 @@ def execute_tools(state: AgentState):
     return {"factcheck": search_results, "status": "executing_tools"}
 
 
-def generate_response(state: AgentState):
+async def generate_response(state: AgentState):
     from datetime import datetime
 
     # 게이지를 쓰지 않고, 항상 spicy 톤 고정
@@ -321,7 +321,7 @@ def generate_response(state: AgentState):
 문서 내용: {state.get('pdf_text', '없음')}
 
 [응답 규칙]
-1. 한 문장 최대 20자. 문장마다 줄바꿈. 카톡처럼 짧게 툭툭.
+1. 한 문장 최대 20자. 문장마다 반드시 줄바꿈. 카톡처럼 짧게 툭툭.
 2. 서술형 금지. 카톡 말투로.
 3. 매번 해결책 던지지 마. 대화하듯이 티키타카 해. 상황 파악 먼저.
 4. 해결책은 문제 파악 됐을 때만. A안 B안 형식 금지. 대화체로 자연스럽게.
@@ -331,7 +331,9 @@ def generate_response(state: AgentState):
 8. 문서 내용이 제공되면 "뭘 분석해?" 같은 되물음 없이 바로 비평 시작해. 문서를 읽었으니까 내용에 대해 바로 말해.
 9. 문서 비평할 때도 한꺼번에 다 쏟지 말고 핵심부터 하나씩.
 10. 문서에 실제로 있는 내용만 언급해. 없는 페이지, 없는 텍스트를 지어내면 안 됨. 확인 안 된 건 말하지 마.
-11. "두 번 말했네", "또 같은 말 하네" 절대 쓰지 마. 사용자는 반복한 적 없다.
+11. 사용자의 말을 그대로 따라하며 시작하는 행위(앵무새)를 **절대 금지**한다. (예: "7캔 마셨네.", "XX했구나.")
+12. 어떤 상황에서도 사용자가 방금 입력한 수치나 핵심 키워드를 확인하며 대화를 시작하지 마라.
+13. 확인 절차 없이 바로 네 분석 결과나 질문으로 훅 들어가라.
 """
 
     messages = [SystemMessage(content=full_system_prompt)]
@@ -339,7 +341,6 @@ def generate_response(state: AgentState):
     for msg in state.get("history", []):
         content = msg["content"]
         if msg["role"] == "user":
-            # 히스토리에 이미지가 있었다는 흔적 남기기 (이미지는 Base64라 히스토리에 다 넣기엔 너무 큼)
             if "[이미지" in content:
                 messages.append(HumanMessage(content=f"{content} (과거에 이미지를 보냈음)"))
             else:
@@ -372,8 +373,9 @@ def generate_response(state: AgentState):
 
     messages.append(HumanMessage(content=current_content))
 
-    response = llm.invoke(messages)
-    content = response.content if isinstance(response.content, str) else str(response.content)
+    content = ""
+    async for chunk in llm.astream(messages):
+        content += chunk.content
 
     return {
         "diagnosis": content,

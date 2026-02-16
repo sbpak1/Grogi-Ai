@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:3000'
 const api = axios.create({ baseURL: API_BASE })
 
 api.interceptors.request.use((config) => {
@@ -76,7 +76,7 @@ export function chatStream(
     onMeta?: (text: string) => void;
     onScore?: (score: any) => void;
     onShareCard?: (card: any) => void;
-    onCrisis?: (data: { message: string; hotlines: string[] }) => void;
+    onCrisis?: (data: { message: string; hotlines: any[]; follow_up?: string }) => void;
   }
 ) {
   const token = localStorage.getItem('token')
@@ -231,4 +231,10 @@ export function chatStream(
       finish()
     },
   })
+}
+
+// 카카오 나에게 메시지 보내기 테스트용
+export async function sendSelfMessage(text: string) {
+  const res = await api.post('/api/message/send', { text });
+  return res.data;
 }
