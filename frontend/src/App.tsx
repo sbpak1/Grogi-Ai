@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import Chat from './pages/Chat'
-// import Login from './pages/Login'
+import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
-import { getSessions, getMe } from './api'
+import { getSessions, getMe, kakaoAuth } from './api'
 
 export default function App() {
+  console.log('App Rendering... Current URL:', window.location.href);
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
@@ -13,24 +14,27 @@ export default function App() {
   const [profile, setProfile] = useState<{ nickname?: string; profileImage?: string; email?: string } | null>(null)
 
   useEffect(() => {
-    // Check for Kakao auth code in URL
+    console.log('App mounted. Processing URL search params...')
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
+
     if (code) {
-      window.history.replaceState({}, '', window.location.pathname)
-      import('./api').then(({ kakaoAuth }) => {
-        kakaoAuth(code)
-          .then((data) => {
-            if (data?.token) {
-              localStorage.setItem('token', data.token)
-              setToken(data.token)
-            }
-          })
-          .catch((err) => {
-            console.error('Kakao login failed', err)
-            alert('로그인에 실패했습니다.')
-          })
-      })
+      console.log('Detection: Kakao code found!', code)
+      window.history.replaceState({}, '', '/')
+
+      console.log('Calling kakaoAuth API...')
+      kakaoAuth(code)
+        .then((data) => {
+          console.log('Kakao login success:', data)
+          if (data?.token) {
+            localStorage.setItem('token', data.token)
+            setToken(data.token)
+          }
+        })
+        .catch((err) => {
+          console.error('Kakao login API call failed:', err)
+          alert('로그인에 실패했습니다.')
+        })
     }
   }, [])
 
@@ -77,6 +81,7 @@ export default function App() {
     setCurrentSessionId(null)
   }
 
+  // Render main layout (always accessible, login triggered via TopBar or when action required)
   return (
     <div className="app">
       <Sidebar
