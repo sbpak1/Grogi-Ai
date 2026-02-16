@@ -204,10 +204,6 @@ async def real_agent_generator(request: ChatRequest):
                         sent_content = True
                         yield {"event": "token", "data": json.dumps({"content": normalized_text}, ensure_ascii=False)}
 
-                elif node_name == "calculate_score":
-                    final_result = event["data"]["output"]
-                    yield {"event": "score", "data": json.dumps(final_result.get("reality_score", {}), ensure_ascii=False)}
-                    yield {"event": "share_card", "data": json.dumps(final_result.get("share_card", {}), ensure_ascii=False)}
 
             if kind == "on_chat_model_start" and _is_generate_response_event(event):
                 yield {"event": "section", "data": json.dumps({"type": "diagnosis"})}
