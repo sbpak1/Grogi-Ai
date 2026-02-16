@@ -53,7 +53,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
       return;
     }
 
-    const tokenData = (await tokenRes.json()) as { access_token: string };
+    const tokenData = (await tokenRes.json()) as { access_token: string; refresh_token?: string };
 
     // 2. 카카오 사용자 정보 조회
     const userRes = await fetch("https://kapi.kakao.com/v2/user/me", {
@@ -74,10 +74,20 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     const nickname = kakaoUser.properties?.nickname ?? "사용자";
 
     // 3. DB upsert (있으면 닉네임 업데이트, 없으면 생성)
+    // 토큰도 같이 저장 (재로그인 시 갱신)
     const user = await prisma.user.upsert({
       where: { kakaoId },
-      update: { nickname },
-      create: { kakaoId, nickname },
+      update: {
+        nickname,
+        kakaoAccessToken: tokenData.access_token,
+        kakaoRefreshToken: tokenData.refresh_token
+      },
+      create: {
+        kakaoId,
+        nickname,
+        kakaoAccessToken: tokenData.access_token,
+        kakaoRefreshToken: tokenData.refresh_token
+      },
     });
 
     // 4. JWT 발급 (24시간)

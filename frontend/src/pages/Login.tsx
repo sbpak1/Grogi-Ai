@@ -54,6 +54,7 @@ export default function Login({ onLogin }: { onLogin?: () => void }) {
 
     w.Kakao.Auth.authorize({
       redirectUri: `${window.location.origin}/auth/kakao`,
+      scope: 'talk_calendar,talk_message',
     })
   }
 
