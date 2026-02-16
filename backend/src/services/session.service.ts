@@ -13,6 +13,16 @@ function isPrismaUnavailableError(error: any) {
     );
 }
 
+function isUserNotFoundError(error: any) {
+    if (!error) return false;
+    const code = String(error.code || "");
+    const message = String(error.message || "");
+    return (
+        code === "P2003" &&
+        (message.includes("user_id") || message.includes("ForeignKeyConstraintViolation"))
+    );
+}
+
 export const sessionService = {
     async createSession(userId: string) {
         const data = {
@@ -23,8 +33,17 @@ export const sessionService = {
         try {
             return await prisma.session.create({ data });
         } catch (error) {
-            if (!isPrismaUnavailableError(error)) throw error;
-            console.warn("[sessionService] DB unavailable. Using mock session.");
+            const unavailable = isPrismaUnavailableError(error);
+            const userMissing = isUserNotFoundError(error);
+
+            if (!unavailable && !userMissing) throw error;
+
+            if (userMissing) {
+                console.warn(`[sessionService] User ${userId} not found in DB. Using mock session.`);
+            } else {
+                console.warn("[sessionService] DB unavailable. Using mock session.");
+            }
+
             return {
                 id: `mock-session-${Date.now()}`,
                 ...data,
