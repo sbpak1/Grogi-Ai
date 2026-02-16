@@ -235,7 +235,25 @@ def analyze_images(state: AgentState):
     ]
 
     for img in images:
-        img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
+        if img.startswith("http"):
+            img_url = img
+        elif img.startswith("data:image/"):
+            img_url = img
+        else:
+            # 기본값 jpeg, 하지만 png일 수도 있음 -> 헤더 보고 판별 시도
+            # 간단히: /9j/ -> jpg, iVBORw0KGgo -> png
+            if img.startswith("/9j/"):
+                mime = "image/jpeg"
+            elif img.startswith("iVBORw0KGgo"):
+                mime = "image/png"
+            elif img.startswith("R0lGOD"):
+                mime = "image/gif"
+            elif img.startswith("UklGR"):
+                mime = "image/webp"
+            else:
+                mime = "image/jpeg" # fallback
+            img_url = f"data:{mime};base64,{img}"
+
         messages[1].content.append({"type": "image_url", "image_url": {"url": img_url}})
 
     vision_llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
@@ -319,7 +337,23 @@ def generate_response(state: AgentState):
 
     current_content = [{"type": "text", "text": state["user_message"]}]
     for img in state.get("images", []):
-        img_url = img if img.startswith("http") else f"data:image/jpeg;base64,{img}"
+        if img.startswith("http"):
+            img_url = img
+        elif img.startswith("data:image/"):
+            img_url = img
+        else:
+            if img.startswith("/9j/"):
+                mime = "image/jpeg"
+            elif img.startswith("iVBORw0KGgo"):
+                mime = "image/png"
+            elif img.startswith("R0lGOD"):
+                mime = "image/gif"
+            elif img.startswith("UklGR"):
+                mime = "image/webp"
+            else:
+                mime = "image/jpeg"
+            img_url = f"data:{mime};base64,{img}"
+
         current_content.append({"type": "image_url", "image_url": {"url": img_url}})
     for img in state.get("pdf_images", []):
         current_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}})
