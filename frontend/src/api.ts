@@ -1,11 +1,12 @@
 import axios from 'axios'
 import { fetchEventSource } from '@microsoft/fetch-event-source'
 
-const API_BASE = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3000'
-    : '')
+const isLocal = typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+
+const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ||
+  (isLocal ? 'http://localhost:3000' : 'https://api.grogi.store')
+
 const api = axios.create({ baseURL: API_BASE })
 
 api.interceptors.request.use((config) => {
