@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import Chat from './pages/Chat'
-// import Login from './pages/Login'
+import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import { getSessions, getMe } from './api'
