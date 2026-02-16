@@ -10,6 +10,7 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
+  const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
@@ -31,22 +32,27 @@ export default function Chat() {
   async function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault()
     const text = input.trim()
-    if (!text && attachedImages.length === 0) return
+    if (!text && attachedImages.length === 0 && attachedPdfs.length === 0) return
     if (streaming) return
 
     setStreaming(true)
     setAnalysisPreview(null)
 
     // 유저 메시지 추가
-    const userContent = attachedImages.length > 0
-      ? `[이미지 ${attachedImages.length}장] ${text || '(이미지 분석 요청)'}`
+    const parts: string[] = []
+    if (attachedImages.length > 0) parts.push(`[이미지 ${attachedImages.length}장]`)
+    if (attachedPdfs.length > 0) parts.push(`[문서: ${attachedPdfs.map(p => p.name).join(', ')}]`)
+    const userContent = parts.length > 0
+      ? `${parts.join(' ')} ${text || '(파일 분석 요청)'}`
       : text
 
     setMessages((prev) => [...prev, { role: 'user', content: userContent }])
 
     const currentImages = [...attachedImages]
+    const currentPdfs = [...attachedPdfs]
     setInput('')
     setAttachedImages([])
+    setAttachedPdfs([])
     scrollToBottom()
 
     try {
@@ -65,8 +71,9 @@ export default function Chat() {
       chatStream(
         {
           session_id: currentSessionId!,
-          message: text || (currentImages.length > 0 ? '이미지 분석해줘' : ''),
+          message: text || (currentImages.length > 0 || currentPdfs.length > 0 ? '파일 분석해줘' : ''),
           images: currentImages.length > 0 ? currentImages : undefined,
+          pdfs: currentPdfs.length > 0 ? currentPdfs.map(p => ({ filename: p.name, content: p.base64 })) : undefined,
         },
         {
           onMessage(chunk) {
@@ -152,13 +159,24 @@ export default function Chat() {
 
   const processFiles = (files: FileList) => {
     Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) return
       const reader = new FileReader()
-      reader.onload = (e) => {
-        const base64 = (e.target?.result as string).split(',')[1]
-        setAttachedImages((prev) => [...prev, base64])
+      if (file.type.startsWith('image/')) {
+        reader.onload = (e) => {
+          const base64 = (e.target?.result as string).split(',')[1]
+          setAttachedImages((prev) => [...prev, base64])
+        }
+        reader.readAsDataURL(file)
+      } else if (file.type === 'application/pdf') {
+        if (file.size > 10 * 1024 * 1024) {
+          alert('PDF 파일은 10MB 이하만 가능합니다')
+          return
+        }
+        reader.onload = (e) => {
+          const base64 = (e.target?.result as string).split(',')[1]
+          setAttachedPdfs((prev) => [...prev, { name: file.name, base64 }])
+        }
+        reader.readAsDataURL(file)
       }
-      reader.readAsDataURL(file)
     })
   }
 
@@ -198,7 +216,7 @@ export default function Chat() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
-            <span className="msgRole">{m.role === 'user' ? '나' : m.role === 'assistant' ? 'Grogi' : '시스템'}</span>
+            {m.role === 'system' && <span className="msgRole">시스템</span>}
             <span className="msgContent">{m.content}</span>
           </div>
         ))}
@@ -212,12 +230,19 @@ export default function Chat() {
       </div>
 
       <form onSubmit={handleSend} className="chatForm">
-        {attachedImages.length > 0 && (
+        {(attachedImages.length > 0 || attachedPdfs.length > 0) && (
           <div className="imagePreviewList">
             {attachedImages.map((img, i) => (
-              <div key={i} className="previewItem">
+              <div key={`img-${i}`} className="previewItem">
                 <img src={`data:image/jpeg;base64,${img}`} alt="preview" />
                 <button type="button" className="removeImgBtn" onClick={() => removeImage(i)}>×</button>
+              </div>
+            ))}
+            {attachedPdfs.map((pdf, i) => (
+              <div key={`pdf-${i}`} className="pdfPreviewItem">
+                <span className="pdfIcon">PDF</span>
+                <span className="pdfName">{pdf.name}</span>
+                <button type="button" className="removeImgBtn" onClick={() => setAttachedPdfs(prev => prev.filter((_, idx) => idx !== i))}>×</button>
               </div>
             ))}
           </div>
@@ -242,7 +267,7 @@ export default function Chat() {
           <div className="btnGroup">
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,application/pdf"
               multiple
               ref={fileInputRef}
               onChange={(e) => e.target.files && processFiles(e.target.files)}
@@ -251,7 +276,7 @@ export default function Chat() {
             <button type="button" className="iconBtn" onClick={() => fileInputRef.current?.click()} disabled={streaming}>
               📷
             </button>
-            <button type="submit" className="submitBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0)}>
+            <button type="submit" className="submitBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0 && attachedPdfs.length === 0)}>
               전송
             </button>
           </div>

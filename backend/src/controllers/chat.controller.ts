@@ -3,7 +3,7 @@ import { chatService } from "../services/chat.service";
 
 export const chatController = {
     async send(req: Request, res: Response) {
-        const { sessionId, message, images, ocr_text } = req.body;
+        const { sessionId, message, images, ocr_text, pdfs } = req.body;
         const resolvedSessionId =
             typeof sessionId === "string" && sessionId.trim()
                 ? sessionId.trim()
@@ -18,7 +18,8 @@ export const chatController = {
                 message,
                 images,
                 ocr_text,
-                req.userId
+                req.userId,
+                pdfs
             );
 
             res.setHeader("Content-Type", "text/event-stream");

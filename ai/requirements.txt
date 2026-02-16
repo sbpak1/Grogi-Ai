@@ -13,3 +13,7 @@ sse-starlette
 httpx
 tiktoken
 duckduckgo-search
+langchain-anthropic
+langchain-google-genai
+pypdf
+pymupdf

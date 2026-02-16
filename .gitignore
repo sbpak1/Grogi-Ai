@@ -38,3 +38,9 @@ docker-compose.override.yml
 .env
 .env.local
 .env.production
+
+# Agent/Tool Local State
+.bkit/
+docs/.bkit-memory.json
+docs/.pdca-status.json
+docs/.pdca-snapshots/
