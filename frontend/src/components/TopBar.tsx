@@ -42,18 +42,16 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
         }
     }
 
-    function triggerLogin() {
-        const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-        const REDIRECT_URI = `${window.location.origin}/auth/kakao`
+    // Prepare Kakao Auth URL in advance for zero-latency redirect
+    const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
+    const REDIRECT_URI = `${window.location.origin}/auth/kakao`
+    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
 
+    function triggerLogin() {
         if (!KAKAO_KEY) {
-            alert('VITE_KAKAO_JS_KEY is missing')
+            alert('로그인 설정(API Key)이 누락되었습니다.')
             return
         }
-
-        // Direct redirection to Kakao Auth URL (REST API method)
-        const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=talk_message`
-
         window.location.href = KAKAO_AUTH_URL
     }
 
@@ -69,11 +67,20 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
                 <div className="userProfile">
                     {isGuest ? (
                         <button className="avatarBtn" onClick={triggerLogin} title="로그인">
-                            <img
-                                src={defaultAvatar}
-                                alt="guest"
-                                style={{ borderRadius: '50%', width: '32px', height: '32px', filter: 'grayscale(100%)' }}
-                            />
+                            <div style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                backgroundColor: '#333',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#999'
+                            }}>
+                                <svg viewBox="0 0 24 24" width="20" height="20">
+                                    <path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                                </svg>
+                            </div>
                         </button>
                     ) : (
                         <button className="avatarBtn" onClick={() => setIsPopoverOpen(!isPopoverOpen)} title="프로필">

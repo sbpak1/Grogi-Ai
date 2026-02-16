@@ -77,17 +77,32 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     const kakaoUser = (await userRes.json()) as {
       id: number;
       properties?: { nickname?: string; profile_image?: string };
-      kakao_account?: { email?: string };
+      kakao_account?: {
+        email?: string;
+        profile?: {
+          nickname?: string;
+          profile_image_url?: string;
+          thumbnail_image_url?: string;
+        }
+      };
     };
     console.log("카카오 유저 데이터 수신:", JSON.stringify(kakaoUser));
 
     const kakaoId = String(kakaoUser.id);
-    const nickname = kakaoUser.properties?.nickname ?? "사용자";
-    const profileImage = kakaoUser.properties?.profile_image;
+    const nickname = kakaoUser.properties?.nickname ?? kakaoUser.kakao_account?.profile?.nickname ?? "사용자";
+
+    // Check multiple locations for profile image
+    const profileImage =
+      kakaoUser.properties?.profile_image ??
+      kakaoUser.kakao_account?.profile?.profile_image_url ??
+      kakaoUser.kakao_account?.profile?.thumbnail_image_url;
+
     const email = kakaoUser.kakao_account?.email;
 
+    console.log(`[AUTH] Extracted Data - kakaoId: ${kakaoId}, nickname: ${nickname}, profileImage: ${profileImage}, email: ${email}`);
+
     // 3. DB upsert (있으면 정보 업데이트, 없으면 생성)
-    console.log("DB upsert 시도. kakaoId:", kakaoId);
+    console.log(`[AUTH] Upserting user for kakaoId: ${kakaoId}, nickname: ${nickname}`);
     const user = await prisma.user.upsert({
       where: { kakaoId },
       update: {
@@ -106,7 +121,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
         kakaoRefreshToken: tokenData.refresh_token
       },
     });
-    console.log("DB upsert 성공. userId:", user.id);
+    console.log(`[AUTH] User session created: userId=${user.id} for kakaoId=${kakaoId}`);
 
     // 4. JWT 발급 (24시간)
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {

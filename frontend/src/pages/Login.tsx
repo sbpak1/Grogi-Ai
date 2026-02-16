@@ -32,7 +32,7 @@ export default function Login({ onLogin }: { onLogin?: () => void }) {
 
     // Direct redirection to Kakao Auth URL (REST API method)
     // talk_message scope included (talk_calendar removed as per previous request)
-    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=talk_message`
+    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
 
     window.location.href = KAKAO_AUTH_URL
   }

@@ -3,7 +3,7 @@ import Chat from './pages/Chat'
 import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
-import { getSessions, getMe } from './api'
+import { getSessions, getMe, kakaoAuth } from './api'
 
 export default function App() {
   console.log('App Rendering... Current URL:', window.location.href);
@@ -20,24 +20,21 @@ export default function App() {
 
     if (code) {
       console.log('Detection: Kakao code found!', code)
-      // Use clean URL for state replacement
       window.history.replaceState({}, '', '/')
 
-      import('./api').then(({ kakaoAuth }) => {
-        console.log('Calling kakaoAuth API...')
-        kakaoAuth(code)
-          .then((data) => {
-            console.log('Kakao login success:', data)
-            if (data?.token) {
-              localStorage.setItem('token', data.token)
-              setToken(data.token)
-            }
-          })
-          .catch((err) => {
-            console.error('Kakao login API call failed:', err)
-            alert('로그인에 실패했습니다.')
-          })
-      })
+      console.log('Calling kakaoAuth API...')
+      kakaoAuth(code)
+        .then((data) => {
+          console.log('Kakao login success:', data)
+          if (data?.token) {
+            localStorage.setItem('token', data.token)
+            setToken(data.token)
+          }
+        })
+        .catch((err) => {
+          console.error('Kakao login API call failed:', err)
+          alert('로그인에 실패했습니다.')
+        })
     }
   }, [])
 
