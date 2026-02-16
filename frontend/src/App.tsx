@@ -36,7 +36,7 @@ export default function App() {
 
     if (code) {
       window.history.replaceState({}, '', '/')
-      kakaoAuth(code)
+      kakaoAuth(code, `${window.location.origin}/auth/kakao`)
         .then((data) => {
           if (data?.token) {
             localStorage.setItem('token', data.token)
