@@ -21,3 +21,4 @@ pydantic-settings
 langsmith
 langgraph-checkpoint
 langgraph-prebuilt
+cachetools

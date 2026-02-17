@@ -1,11 +1,11 @@
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,28 +37,28 @@ app.add_middleware(
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"] = Field(..., description="메시지 역할")
+    content: str = Field(..., max_length=10000)
 
 
 class PdfAttachment(BaseModel):
-    filename: str
-    content: str
+    filename: str = Field(..., max_length=255)
+    content: str = Field(..., max_length=20_000_000)  # ~15MB base64
 
 
 class ChatRequest(BaseModel):
-    session_id: str
-    user_message: str
-    level: str
-    category: str
-    history: List[ChatMessage]
-    images: Optional[List[str]] = None
-    ocr_text: Optional[str] = None
-    pdfs: Optional[List[PdfAttachment]] = None
+    session_id: str = Field(..., max_length=200)
+    user_message: str = Field(..., max_length=10000)
+    level: str = Field(..., max_length=50)
+    category: str = Field(..., max_length=50)
+    history: List[ChatMessage] = Field(default=[], max_length=50)
+    images: Optional[List[str]] = Field(default=None, max_length=5)
+    ocr_text: Optional[str] = Field(default=None, max_length=10000)
+    pdfs: Optional[List[PdfAttachment]] = Field(default=None, max_length=3)
 
 
 class TitleRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=5000)
 
 
 @app.get("/agent/health")
@@ -209,7 +209,9 @@ async def real_agent_generator(request: ChatRequest):
                 yield {"event": "section", "data": json.dumps({"type": "diagnosis"})}
 
     except Exception as e:
-        yield {"event": "error", "data": json.dumps({"code": "AGENT_ERROR", "message": f"에러 발생: {str(e)}"})}
+        import logging
+        logging.exception("Agent error during chat generation")
+        yield {"event": "error", "data": json.dumps({"code": "AGENT_ERROR", "message": "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."})}
 
     yield {"event": "done", "data": "{}"}
 

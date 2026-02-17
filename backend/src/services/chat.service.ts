@@ -110,21 +110,26 @@ function isMessageSessionForeignKeyError(error: any) {
 }
 
 export const chatService = {
+    async verifySessionOwner(sessionId: string, userId: string): Promise<boolean> {
+        try {
+            const session = await prisma.session.findUnique({
+                where: { id: sessionId },
+                select: { userId: true },
+            });
+            if (!session) return true; // 세션이 아직 없으면 생성 예정이므로 통과
+            return session.userId === userId;
+        } catch {
+            return true; // DB 에러 시 fallback (mock 세션 모드)
+        }
+    },
+
     async ensureSessionForChat(sessionId: string, userId?: string, privateMode: boolean = false) {
         try {
-            let resolvedUserId = userId;
-
-            if (!resolvedUserId) {
-                const devUser = await prisma.user.upsert({
-                    where: { kakaoId: "dev-local-user" },
-                    update: {},
-                    create: {
-                        kakaoId: "dev-local-user",
-                        nickname: "Dev User",
-                    },
-                });
-                resolvedUserId = devUser.id;
+            if (!userId) {
+                throw new Error("인증된 사용자만 채팅할 수 있습니다");
             }
+
+            const resolvedUserId = userId;
 
             const existing = await prisma.session.findUnique({
                 where: { id: sessionId },
