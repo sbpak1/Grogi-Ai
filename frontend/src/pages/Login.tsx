@@ -1,26 +1,6 @@
 import React from 'react'
-import { kakaoAuth } from '../api'
 
 export default function Login({ onLogin }: { onLogin?: () => void }) {
-  // Check for Kakao auth code in URL on mount (callback processing)
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    if (code) {
-      // Clear code from URL to prevent re-submission on refresh and clean up path
-      window.history.replaceState({}, '', '/')
-
-      kakaoAuth(code)
-        .then((data) => {
-          if (data?.token) {
-            localStorage.setItem('token', data.token)
-            onLogin && onLogin()
-          }
-        })
-        .catch(() => alert('Kakao login failed'))
-    }
-  }, [onLogin])
-
   const handleKakaoLogin = () => {
     const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
     const REDIRECT_URI = `${window.location.origin}/auth/kakao`

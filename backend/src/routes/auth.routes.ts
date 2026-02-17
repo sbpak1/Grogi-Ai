@@ -118,7 +118,10 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
 
     // 4. JWT 발급 (24시간)
     const token = jwt.sign({ userId: user.id }, env.JWT_SECRET, {
+      algorithm: "HS256",
       expiresIn: "24h",
+      issuer: "grogi-api",
+      audience: "grogi-frontend",
     });
 
     res.json({
@@ -253,7 +256,10 @@ authRouter.post("/dev-login", async (_req: Request, res: Response) => {
     }
 
     const token = jwt.sign({ userId }, env.JWT_SECRET, {
+      algorithm: "HS256",
       expiresIn: "24h",
+      issuer: "grogi-api",
+      audience: "grogi-frontend",
     });
 
     res.json({

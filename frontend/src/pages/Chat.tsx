@@ -24,6 +24,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // 컴포넌트 언마운트 시 SSE 연결 정리
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
@@ -117,7 +125,10 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
       scrollToBottom()
 
-      chatStream(
+      // 이전 스트림이 있으면 중단
+      abortRef.current?.abort()
+
+      abortRef.current = chatStream(
         {
           session_id: currentSessionId!,
           message: text || (currentImages.length > 0 || currentPdfs.length > 0 ? '파일 분석해줘' : ''),

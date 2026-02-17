@@ -116,7 +116,7 @@ def extract_pdf_text(state: AgentState):
     return result
 
 
-def crisis_check(state: AgentState):
+async def crisis_check(state: AgentState):
     user_msg = state.get("user_message", "")
     session_id = state.get("session_id", "")
 
@@ -141,7 +141,7 @@ def crisis_check(state: AgentState):
                 ("user", "{input}"),
             ])
             chain = followup_prompt | llm_mini | StrOutputParser()
-            result = chain.invoke({"input": user_msg}).strip().upper()
+            result = (await chain.ainvoke({"input": user_msg})).strip().upper()
             return {"crisis_level": "crisis" if "CRISIS" in result else "safe"}
 
     # 1차: 구체적 방법 언급 키워드 → 즉시 crisis
@@ -185,7 +185,7 @@ CRISIS (매우 드물다):
         ]
     )
     chain = crisis_prompt | llm_mini | StrOutputParser()
-    result = chain.invoke({"input": user_msg}).strip().upper()
+    result = (await chain.ainvoke({"input": user_msg})).strip().upper()
 
     if "CRISIS" in result:
         return {"crisis_level": "crisis"}
@@ -197,7 +197,7 @@ CRISIS (매우 드물다):
     return {"crisis_level": "safe"}
 
 
-def analyze_input(state: AgentState):
+async def analyze_input(state: AgentState):
     if state.get("crisis_level") in ("crisis", "unclear"):
         return state
 
@@ -211,7 +211,7 @@ def analyze_input(state: AgentState):
         ]
     )
     chain = analysis_prompt | llm_mini | StrOutputParser()
-    category = chain.invoke({"input": state["user_message"]}).strip().lower()
+    category = (await chain.ainvoke({"input": state["user_message"]})).strip().lower()
 
     valid_categories = ["career", "love", "finance", "self", "etc"]
     if category not in valid_categories:
@@ -220,7 +220,7 @@ def analyze_input(state: AgentState):
     return {"category": category}
 
 
-def analyze_images(state: AgentState):
+async def analyze_images(state: AgentState):
     images = state.get("images", [])
     if not images:
         return {"image_analysis": "이미지 없음"}
@@ -260,7 +260,7 @@ def analyze_images(state: AgentState):
         messages[1].content.append({"type": "image_url", "image_url": {"url": img_url}})
 
     vision_llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
-    result = vision_llm.invoke(messages)
+    result = await vision_llm.ainvoke(messages)
     return {"image_analysis": result.content}
 
 
@@ -268,7 +268,7 @@ def select_tools(state: AgentState):
     return {"status": "selecting_tools"}
 
 
-def execute_tools(state: AgentState):
+async def execute_tools(state: AgentState):
     search_tool = get_search_tool()
     search_results = "검색 결과 없음"
 
@@ -283,7 +283,7 @@ def execute_tools(state: AgentState):
             ("user", "{input}")
         ])
         extract_chain = extract_prompt | llm_mini | StrOutputParser()
-        search_query = extract_chain.invoke({"input": state["user_message"]}).strip()
+        search_query = (await extract_chain.ainvoke({"input": state["user_message"]})).strip()
 
         if search_query and search_query.upper() != "NONE":
             print(f"[Search] Query extracted: {search_query}")

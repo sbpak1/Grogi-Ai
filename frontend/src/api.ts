@@ -106,7 +106,7 @@ export function chatStream(
     onShareCard?: (card: any) => void;
     onCrisis?: (data: { message: string; hotlines: any[]; follow_up?: string }) => void;
   }
-) {
+): AbortController {
   const token = localStorage.getItem('token')
   const normalizedPayload = {
     sessionId: payload.sessionId || payload.session_id,
@@ -123,13 +123,16 @@ export function chatStream(
     handlers.onDone?.()
   }
 
-  return fetchEventSource(`${API_BASE}/api/chat`, {
+  const abortController = new AbortController()
+
+  fetchEventSource(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(normalizedPayload),
+    signal: abortController.signal,
     async onopen(response) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
     },
@@ -253,6 +256,7 @@ export function chatStream(
       }
     },
     onerror(err) {
+      if (abortController.signal.aborted) return
       handlers.onError?.(err)
       throw err
     },
@@ -260,6 +264,8 @@ export function chatStream(
       finish()
     },
   })
+
+  return abortController
 }
 
 // 카카오 나에게 메시지 보내기 테스트용
