@@ -1,20 +1,9 @@
 import React from 'react'
+import { redirectToKakaoLogin } from '../lib/kakao'
 
 export default function Login({ onLogin }: { onLogin?: () => void }) {
   const handleKakaoLogin = () => {
-    const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-    const REDIRECT_URI = `${window.location.origin}/auth/kakao`
-
-    if (!KAKAO_KEY) {
-      alert('VITE_KAKAO_JS_KEY is missing')
-      return
-    }
-
-    // Direct redirection to Kakao Auth URL (REST API method)
-    // talk_message scope included (talk_calendar removed as per previous request)
-    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
-
-    window.location.href = KAKAO_AUTH_URL
+    redirectToKakaoLogin()
   }
 
   return (
