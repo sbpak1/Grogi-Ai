@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { updateProfile } from '../api'
+import { redirectToKakaoLogin } from '../lib/kakao'
 
 interface TopBarProps {
     onLogout: () => void
@@ -8,7 +9,7 @@ interface TopBarProps {
         profileImage?: string
         email?: string
     } | null
-    onProfileUpdate?: (updated: any) => void
+    onProfileUpdate?: (updated: { nickname?: string; profileImage?: string; email?: string }) => void
 }
 
 export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarProps) {
@@ -42,17 +43,8 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
         }
     }
 
-    // Prepare Kakao Auth URL in advance for zero-latency redirect
-    const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-    const REDIRECT_URI = `${window.location.origin}/auth/kakao`
-    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
-
     function triggerLogin() {
-        if (!KAKAO_KEY) {
-            alert('로그인 설정(API Key)이 누락되었습니다.')
-            return
-        }
-        window.location.href = KAKAO_AUTH_URL
+        redirectToKakaoLogin()
     }
 
     const defaultAvatar = "https://lh3.googleusercontent.com/a/default-user=s64"
