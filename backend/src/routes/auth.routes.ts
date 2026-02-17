@@ -54,7 +54,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     if (!tokenRes.ok) {
       const errorText = await tokenRes.text();
       console.error("카카오 토큰 교환 실패. 상태:", tokenRes.status, "응답:", errorText);
-      res.status(401).json({ error: "INVALID_CODE", details: errorText });
+      res.status(401).json({ error: "INVALID_CODE" });
       return;
     }
 
@@ -68,7 +68,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     if (!userRes.ok) {
       const errorText = await userRes.text();
       console.error("카카오 유저 정보 조회 실패. 상태:", userRes.status, "응답:", errorText);
-      res.status(401).json({ error: "KAKAO_USER_FETCH_FAILED", details: errorText });
+      res.status(401).json({ error: "KAKAO_USER_FETCH_FAILED" });
       return;
     }
 
@@ -127,7 +127,7 @@ authRouter.post("/kakao", async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error("카카오 로그인 치명적 실패:", err);
-    res.status(500).json({ error: "AUTH_FAILED", message: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: "AUTH_FAILED" });
   }
 });
 
@@ -229,6 +229,11 @@ authRouter.patch("/settings", authMiddleware, async (req: Request, res: Response
 
 // POST /api/auth/dev-login — 개발용 즉시 로그인 (인가 코드 불필요)
 authRouter.post("/dev-login", async (_req: Request, res: Response) => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "NOT_FOUND" });
+    return;
+  }
+
   try {
     const kakaoId = "dev-local-user";
     const nickname = "테스트 유저";
