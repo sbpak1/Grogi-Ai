@@ -1,6 +1,7 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
+import { isPrismaUnavailableError } from "../lib/prisma-errors";
 
 type ChatSessionContext = {
     id: string;
@@ -78,19 +79,6 @@ function appendMockMessage(
     }
 
     return msg;
-}
-
-function isPrismaUnavailableError(error: any) {
-    if (!error) return false;
-    const code = String(error.code || "");
-    const message = String(error.message || "");
-    return (
-        code === "P2021" ||
-        code === "P1001" ||
-        code === "ECONNREFUSED" ||
-        message.includes("does not exist") ||
-        message.includes("ECONNREFUSED")
-    );
 }
 
 function isMessageSessionForeignKeyError(error: any) {

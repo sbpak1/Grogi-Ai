@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react'
 import { chatStream, createSession, getChatHistory } from '../api'
+import { redirectToKakaoLogin } from '../lib/kakao'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -51,7 +52,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     try {
       const history = await getChatHistory(id)
       const messageList = Array.isArray(history) ? history : (history.messages || [])
-      setMessages(messageList.map((m: any) => ({
+      setMessages(messageList.map((m: { role: 'user' | 'assistant' | 'system'; content: string }) => ({
         role: m.role,
         content: m.content
       })))
@@ -82,14 +83,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
 
     const token = localStorage.getItem('token')
     if (!token) {
-      // Trigger same login redirect as TopBar
-      const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-      const REDIRECT_URI = `${window.location.origin}/auth/kakao`
-      if (!KAKAO_KEY) {
-        alert('로그인이 필요합니다. (API키 누락)')
-        return
-      }
-      window.location.href = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
+      redirectToKakaoLogin()
       return
     }
 
@@ -184,7 +178,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             scrollToBottom()
           },
           onCrisis(data) {
-            const hotlines = data.hotlines?.map((h: any) =>
+            const hotlines = data.hotlines?.map((h: string | { name: string; number: string; desc: string }) =>
               typeof h === 'string' ? h : `${h.name}: ${h.number} (${h.desc})`
             ).join('\n') || ''
             const followUp = data.follow_up ? `\n\n${data.follow_up}` : ''

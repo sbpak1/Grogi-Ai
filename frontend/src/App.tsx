@@ -11,7 +11,7 @@ export default function App() {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
-  const [sessions, setSessions] = useState<any[]>([])
+  const [sessions, setSessions] = useState<Array<{ id: string; title?: string; createdAt: string; privateMode?: boolean; messages?: Array<{ content: string }> }>>([])
   const [profile, setProfile] = useState<{
     nickname?: string;
     profileImage?: string;
@@ -112,7 +112,7 @@ export default function App() {
         <TopBar
           onLogout={handleLogout}
           profile={profile}
-          onProfileUpdate={(updated) => setProfile((prev: any) => ({ ...prev, ...updated }))}
+          onProfileUpdate={(updated) => setProfile((prev) => prev ? { ...prev, ...updated } : prev)}
         />
         <main className="chatContainer">
           <Chat
@@ -138,7 +138,7 @@ export default function App() {
             setIsCurrentSessionPrivate(false); // 새로운 세션 준비 중이므로 현재 상태 초기화
           }}
           settings={profile}
-          onUpdate={(updated) => setProfile((prev: any) => ({ ...prev, ...updated }))}
+          onUpdate={(updated) => setProfile((prev) => prev ? { ...prev, ...updated } : prev)}
         />
       )}
     </div>
