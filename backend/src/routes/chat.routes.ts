@@ -6,8 +6,10 @@
  */
 import { Router } from "express";
 import { chatController } from "../controllers/chat.controller";
+import { authMiddleware } from "../middlewares/auth.middleware";
 
 export const chatRouter = Router();
 
+chatRouter.use(authMiddleware);
 chatRouter.get("/:sessionId", chatController.getHistory);
 chatRouter.post("/", chatController.send);

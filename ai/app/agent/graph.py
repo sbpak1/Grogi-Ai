@@ -2,6 +2,7 @@ import base64
 from io import BytesIO
 from typing import TypedDict, List
 from pathlib import Path
+from cachetools import TTLCache
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -50,8 +51,8 @@ llm = llm_gemini
 llm_mini = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
 
-_pdf_cache: dict[str, dict] = {}
-_crisis_pending: dict[str, str] = {}  # session_id → 원본 위기 메시지
+_pdf_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)  # 최대 500개, 1시간 TTL
+_crisis_pending: TTLCache = TTLCache(maxsize=500, ttl=600)  # 최대 500개, 10분 TTL
 
 
 def extract_pdf_text(state: AgentState):
