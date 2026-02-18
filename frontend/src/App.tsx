@@ -34,6 +34,17 @@ export default function App() {
   }, [profile?.fontSize])
 
   useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setSidebarCollapsed(true)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+    handleResize() // Initial check
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
 

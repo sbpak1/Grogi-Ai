@@ -38,6 +38,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   }, [])
 
   const [thinkingImgIdx, setThinkingImgIdx] = useState(0)
+  const [currentIdleImg, setCurrentIdleImg] = useState(nomalImg)
   const thinkingImgs = [nomalImg, angryImg, angelImg]
 
   useEffect(() => {
@@ -51,6 +52,21 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     }
     return () => clearInterval(interval)
   }, [streaming])
+
+  // Idle state random expression animation
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>
+    if (messages.length === 0 && !streaming) {
+      interval = setInterval(() => {
+        const otherImgs = [nomalImg, angryImg, angelImg];
+        const randomImg = otherImgs[Math.floor(Math.random() * otherImgs.length)];
+        setCurrentIdleImg(randomImg);
+      }, 3000)
+    } else {
+      setCurrentIdleImg(nomalImg)
+    }
+    return () => clearInterval(interval)
+  }, [messages.length, streaming])
 
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
@@ -373,14 +389,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             </div>
             <img
               className="characterImg"
-              src={nomalImg}
+              src={currentIdleImg}
               alt="Grogi"
-              onMouseEnter={(e) => {
+              onMouseEnter={() => {
                 const rand = Math.random() < 0.5 ? angryImg : angelImg;
-                (e.target as HTMLImageElement).src = rand;
+                setCurrentIdleImg(rand);
               }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLImageElement).src = nomalImg;
+              onMouseLeave={() => {
+                setCurrentIdleImg(nomalImg);
               }}
             />
             <div className="inputArea emptyStateInput">
