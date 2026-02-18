@@ -145,6 +145,8 @@ body {
   padding: 12px;
   box-sizing: border-box;
   overflow: hidden;
+  max-width: 280px;
+  /* 너비가 더 넓어지지 않도록 제한 */
 }
 
 .sidebar.expanded {
@@ -399,8 +401,11 @@ body {
 .historySection {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  /* 좌우 스크롤 방지 */
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .sectionTitle {
@@ -418,6 +423,9 @@ body {
   max-height: 520px;
   /* 대략 13개 세션 높이 */
   overflow-y: auto;
+  overflow-x: hidden;
+  /* 좌우 스크롤 방지 */
+  min-width: 0;
 }
 
 .sessionItem {
@@ -450,6 +458,8 @@ body {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .sidebarBottom {
@@ -1082,6 +1092,144 @@ body {
 
 .legalBody li {
   margin-bottom: 8px;
+}
+
+/* Session Deletion & Modal Refined Styles */
+.sessionItemWrapper {
+  display: flex;
+  align-items: center;
+  width: auto;
+  /* width 100% 대신 auto로 변경하여 좌우 여백 확보 */
+  margin-right: 4px;
+  /* 우측 짤림 방지 */
+  border-radius: 8px;
+  position: relative;
+  transition: background-color 0.2s;
+  padding-right: 8px;
+}
+
+.sessionItemWrapper:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sessionItemWrapper.active {
+  background-color: #333537;
+}
+
+.sessionItemWrapper .sessionItem {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text-dim);
+  text-align: left;
+  overflow: hidden;
+  min-width: 0;
+  /* 중요: flex 컨테이너 안에서 줄어들 수 있게 함 */
+}
+
+.sessionItemWrapper.active .sessionItem {
+  color: var(--text-main);
+}
+
+.sessionDeleteBtn {
+  background-color: #000 !important;
+  border: 1px solid #444746 !important;
+  color: #747775;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s, border-color 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.sessionItemWrapper:hover .sessionDeleteBtn {
+  opacity: 1;
+}
+
+.sessionDeleteBtn:hover {
+  border-color: #ff4d4d !important;
+  color: #ff4d4d;
+}
+
+/* Modal Overlay (Fixed to screen) */
+.delete-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.delete-modal {
+  background-color: #1e1f20;
+  border: 1px solid #444746;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 340px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+.delete-modal-text {
+  margin-bottom: 24px;
+  line-height: 1.6;
+  color: #e3e3e3;
+  font-size: 0.95rem;
+}
+
+.delete-modal-text strong {
+  color: #fff;
+}
+
+.delete-modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.delete-modal-actions button {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.confirm-btn {
+  background-color: #ff4d4d;
+  color: white;
+}
+
+.confirm-btn:hover {
+  background-color: #cc0000;
+}
+
+.cancel-btn {
+  background-color: #333;
+  color: #ccc;
+  border: 1px solid #444 !important;
+}
+
+.cancel-btn:hover {
+  background-color: #444;
 }
 
 /* ─── Responsive Queries ───────────────────────── */

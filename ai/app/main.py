@@ -49,7 +49,6 @@ class PdfAttachment(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str = Field(..., max_length=200)
     user_message: str = Field(..., max_length=10000)
-    level: str = Field(..., max_length=50)
     category: str = Field(..., max_length=50)
     history: List[ChatMessage] = Field(default=[], max_length=50)
     images: Optional[List[str]] = Field(default=None, max_length=5)
@@ -107,7 +106,6 @@ async def real_agent_generator(request: ChatRequest):
     initial_state = {
         "session_id": request.session_id,
         "user_message": request.user_message,
-        "level": "spicy",
         "category": request.category,
         "history": [msg.dict() for msg in request.history],
         "images": request.images or [],
@@ -144,9 +142,7 @@ async def real_agent_generator(request: ChatRequest):
 
                 # LangGraph 노드 종료 이벤트만 처리 (metadata에 langgraph_node가 있는 경우)
                 if event.get("metadata", {}).get("langgraph_node") != node_name:
-                    # 노드 자체가 아닌 내부 체인 종료는 무시
-                    if node_name != "generate_response":
-                        continue
+                    continue
 
                 if node_name == "crisis_check":
                     res = event["data"]["output"]
@@ -224,12 +220,21 @@ async def chat_endpoint(request: ChatRequest):
 @app.post("/agent/title")
 async def title_endpoint(request: TitleRequest):
     try:
+        # 1. 언어 먼저 감지
+        lang_prompt = ChatPromptTemplate.from_messages([
+            ("system", "Detect the language of the input. Return ONLY the language name in English (e.g. Korean, English)."),
+            ("user", "{input}")
+        ])
+        lang_chain = lang_prompt | llm_mini | StrOutputParser()
+        detected_lang = (await lang_chain.ainvoke({"input": request.message})).strip()
+
+        # 2. 감지된 언어에 맞춰 제목 생성
         title_prompt = ChatPromptTemplate.from_messages([
-            ("system", """사용자의 첫 메시지를 보고 대화방의 제목을 창의적으로 지어줘.
-- 결과는 15자 이내로 짧고 강렬하게.
-- 이모지는 절대 쓰지마. 문장으로만 작성해
-- 조사나 불필요한 단어는 빼고 핵심만. (예: "에너지 드링크 과유불급", "카페인 중독 경고")
-- 제목만 딱 답해."""),
+            ("system", f"""Create a punchy chat room title based on the user's message.
+- MAX 15 characters.
+- NO emojis.
+- Language: {detected_lang}
+- Only return the title itself."""),
             ("user", "{input}")
         ])
         chain = title_prompt | llm_mini | StrOutputParser()

@@ -50,4 +50,22 @@ export const sessionController = {
             res.status(500).json({ error: "세션 공개여부 수정 실패" });
         }
     },
+
+    async remove(req: Request, res: Response) {
+        const id = req.params.id as string;
+        const userId = req.userId!;
+        console.log(`[DELETE] Request for session ${id} from user ${userId}`);
+
+        try {
+            await sessionService.softDeleteSession(id, userId);
+            console.log(`[DELETE] Successfully deleted session ${id}`);
+            res.json({ success: true });
+        } catch (error: any) {
+            console.error("Session deletion error:", error);
+            if (error.code === 'P2025') {
+                return res.status(404).json({ error: "세션을 찾을 수 없거나 권한이 없습니다." });
+            }
+            res.status(500).json({ error: "세션 삭제 실패" });
+        }
+    },
 };
