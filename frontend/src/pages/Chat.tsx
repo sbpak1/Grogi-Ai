@@ -355,6 +355,9 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
           </button>
         </div>
       </div>
+      <p className="emptyStateDisclaimer">
+        그로기는 공감 대신 이성적인 판단으로 해결책을 제시해주는 AI입니다. 너무 상처 받지 않으시길 바랍니다.
+      </p>
     </form>
   )
 
@@ -382,9 +385,6 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             />
             <div className="inputArea emptyStateInput">
               {renderInputForm()}
-              <p className="emptyStateDisclaimer">
-                그로기는 공감 대신 이성적인 판단으로 해결책을 제시해주는 AI입니다. 너무 상처 받지 않으시길 바랍니다.
-              </p>
             </div>
           </div>
         )}
