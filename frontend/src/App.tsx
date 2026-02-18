@@ -4,12 +4,15 @@ import Login from './pages/Login'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import SettingsModal from './components/SettingsModal'
+import { LegalModal, PrivacyContent, TermsContent } from './components/LegalModals'
 import { getSessions, getMe, kakaoAuth } from './api'
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
+  const [isTermsOpen, setIsTermsOpen] = useState(false)
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<Array<{ id: string; title?: string; createdAt: string; privateMode?: boolean; messages?: Array<{ content: string }> }>>([])
   const [profile, setProfile] = useState<{
@@ -117,6 +120,8 @@ export default function App() {
             setIsNextSessionPrivate(false);
             setIsCurrentSessionPrivate(false);
           }}
+          onOpenPrivacy={() => setIsPrivacyOpen(true)}
+          onOpenTerms={() => setIsTermsOpen(true)}
         />
         <main className="chatContainer">
           <Chat
@@ -145,6 +150,20 @@ export default function App() {
           onUpdate={(updated) => setProfile((prev) => prev ? { ...prev, ...updated } : prev)}
         />
       )}
+
+      <LegalModal
+        isOpen={isPrivacyOpen}
+        onClose={() => setIsPrivacyOpen(false)}
+        title="개인정보처리방침"
+        content={<PrivacyContent />}
+      />
+
+      <LegalModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+        title="서비스 약관"
+        content={<TermsContent />}
+      />
     </div>
   )
 }
