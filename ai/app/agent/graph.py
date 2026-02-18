@@ -477,6 +477,7 @@ def build_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node("crisis_check", crisis_check)
+    workflow.add_node("fan_out", lambda state: {})
     workflow.add_node("extract_pdf_text", extract_pdf_text)
     workflow.add_node("analyze_images", analyze_images)
     workflow.add_node("analyze_input", analyze_input)
@@ -497,14 +498,24 @@ def build_graph():
     workflow.add_conditional_edges(
         "crisis_check",
         route_crisis,
-        {"crisis": END, "unclear": END, "safe": "detect_language"},
+        {"crisis": END, "unclear": END, "safe": "fan_out"},
     )
 
-    workflow.add_edge("detect_language", "extract_pdf_text")
-    workflow.add_edge("extract_pdf_text", "analyze_images")
-    workflow.add_edge("analyze_images", "analyze_input")
-    workflow.add_edge("analyze_input", "execute_tools")
+    # Phase 1: 병렬 실행 (서로 의존성 없음)
+    workflow.add_edge("fan_out", "detect_language")
+    workflow.add_edge("fan_out", "extract_pdf_text")
+    workflow.add_edge("fan_out", "analyze_input")
+
+    # Phase 2: detect_language 결과 필요한 노드들 (병렬)
+    workflow.add_edge("detect_language", "analyze_images")
+    workflow.add_edge("detect_language", "execute_tools")
+
+    # Fan-in: 모든 분석 완료 후 응답 생성
+    workflow.add_edge("analyze_images", "generate_response")
     workflow.add_edge("execute_tools", "generate_response")
+    workflow.add_edge("extract_pdf_text", "generate_response")
+    workflow.add_edge("analyze_input", "generate_response")
+
     workflow.add_edge("generate_response", "calculate_score")
     workflow.add_edge("calculate_score", END)
 

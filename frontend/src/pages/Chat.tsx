@@ -4,9 +4,9 @@ import { redirectToKakaoLogin } from '../lib/kakao'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-const nomalImg = "/nomal.png"
-const angryImg = "/angry.png"
-const angelImg = "/angel.png"
+import nomalImg from "../assets/nomal.png"
+import angryImg from "../assets/angry.png"
+import angelImg from "../assets/angel.png"
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
