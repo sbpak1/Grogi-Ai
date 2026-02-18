@@ -13,7 +13,7 @@ class RealityScore(BaseModel):
     total: int = Field(..., description="총점 (높을수록 현실 회피가 심함)")
     summary: str = Field(..., description="점수에 대한 팩폭 평가")
 
-def calculate_reality_score_logic(user_message: str, ai_response: str) -> dict:
+def calculate_reality_score_logic(user_message: str, ai_response: str, language: str = "Korean") -> dict:
     """
     AG-12: LLM 기반 현실회피지수 산출 (High Score = High Avoidance)
     """
@@ -60,9 +60,9 @@ def calculate_reality_score_logic(user_message: str, ai_response: str) -> dict:
 [중요 채점 규칙]
 1. **10점**을 기준으로 하되, **1점 단위**로 세밀하게 가감점하십시오. (예: 13점, 8점, 17점)
 2. 딱 떨어지는 점수(0, 10, 20)보다는, 사용자의 미묘한 뉘앙스(망설임, 단어 선택, 문장 길이 등)를 반영하여 **중간 점수**를 적극적으로 부여하십시오.
-3. 예를 들어, 완전히 허황되지는 않지만 조금 모호하다면 13점, 꽤 구체적이지만 살짝 비현실적이라면 7점 같은 식입니다.
+3. 예를 들어, 완전히 허황되지는 않지만 조금 모호하다면 13점, 8점 등입니다.
 
-반드시 위 기준에 맞춰 JSON 형식으로 응답하세요:
+반드시 위 기준에 맞춰 JSON 형식으로 응답하세요 (summary 항목은 {language}로 작성하십시오):
 {format_instructions}"""),
         ("user", "사용자 입력: {user_input}\nAI 분석 내용: {ai_response}")
     ])
@@ -73,6 +73,7 @@ def calculate_reality_score_logic(user_message: str, ai_response: str) -> dict:
         score_data = chain.invoke({
             "user_input": user_message,
             "ai_response": ai_response,
+            "language": language,
             "scoring_rubric": scoring_rubric,
             "format_instructions": parser.get_format_instructions()
         })

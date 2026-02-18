@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-from app.prompts.system_prompts import LEVEL_PROMPTS, SYSTEM_PROMPT_BASE
+from app.prompts.system_prompts import SYSTEM_PROMPT_BASE
 from app.tools.calculator import calculate_reality_score_logic
 from app.tools.search import get_search_tool
 
@@ -21,7 +21,6 @@ from app.tools.search import get_search_tool
 class AgentState(TypedDict):
     session_id: str
     user_message: str
-    level: str
     category: str
     history: List[dict]
     status: str
@@ -37,6 +36,7 @@ class AgentState(TypedDict):
     pdfs: List[dict]
     pdf_text: str
     pdf_images: List[str]
+    detected_language: str # "Korean", "English", "Japanese", "Chinese", etc.
 
 
 # ai/.env를 명시 로드하여 상위 쉘 환경변수보다 우선 적용
@@ -149,7 +149,11 @@ async def crisis_check(state: AgentState):
     if any(kw in user_msg for kw in hard_crisis):
         return {"crisis_level": "crisis"}
 
-    # 2차: LLM 판별
+    # 2차: LLM 판별 (문맥 포함)
+    history = state.get("history", [])
+    context_msgs = history[-3:] if history else []
+    context_str = "\n".join([f"{m['role']}: {m['content']}" for m in context_msgs])
+
     crisis_prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -169,6 +173,13 @@ SAFE (대부분 이쪽이다):
 - 상대방에게 하는 말 ("뒤질래?", "죽을래?")
 - 자살/자해와 무관한 고민 상담 요청
 
+[추가 판단 지침 - 극도로 보수적으로 판단할 것]
+1. 애매하거나 불확실하면 무조건 SAFE다.
+2. 사용자가 사과문, 반성문, 다짐글 등의 작성을 요청하거나 그에 대한 "예시"를 달라고 하는 경우 -> 100% SAFE.
+3. 단순히 "예시만 좀 줘", "도와줘", "써줘" 등의 요청은 대화 맥락(사과문 작성 등) 내에서 이루어지는 기능적 요청이므로 -> 100% SAFE.
+4. "죽고 싶다"는 표현이 일상적 불만/피곤/짜증과 함께 나오거나, 농담조라면 -> SAFE.
+5. 오직 구체적인 자해/자살 계획이 있거나, 명백한 사후 정리/작별 인사 문맥일 때만 CRISIS.
+
 UNCLEAR (모호한 경우):
 - 위기 신호가 직접적이진 않지만 반복적 절망감이 느껴질 때
 - "사는 게 의미가 없다", "없어져도 아무도 모를 거야" 같은 고립감 표현
@@ -179,13 +190,16 @@ CRISIS (매우 드물다):
 - 유서/마지막 인사 맥락 ("다 정리했다", "마지막으로 하고 싶은 말")
 - 자해 경험/계획 언급 ("또 그었어", "이번엔 진짜로")
 
-애매하면 SAFE로 판단하라. UNCLEAR는 정말 모호할 때만.""",
+애매하면 SAFE로 판단하라. UNCLEAR는 정말 모호할 때만.
+
+[이전 대화 맥락]
+{context}""",
             ),
             ("user", "{input}"),
         ]
     )
     chain = crisis_prompt | llm_mini | StrOutputParser()
-    result = (await chain.ainvoke({"input": user_msg})).strip().upper()
+    result = (await chain.ainvoke({"input": user_msg, "context": context_str})).strip().upper()
 
     if "CRISIS" in result:
         return {"crisis_level": "crisis"}
@@ -195,6 +209,36 @@ CRISIS (매우 드물다):
             _crisis_pending[session_id] = user_msg
         return {"crisis_level": "unclear"}
     return {"crisis_level": "safe"}
+
+
+async def detect_language(state: AgentState):
+    """Detects the user's current language based on the message and history."""
+    user_msg = state.get("user_message", "")
+    history = state.get("history", [])
+
+    # Recent history for context
+    context_msgs = history[-3:] if history else []
+    context_str = "\n".join([f"{m['role']}: {m['content']}" for m in context_msgs])
+
+    lang_prompt = ChatPromptTemplate.from_messages([
+        ("system", """Task: Detect the user's current spoken language.
+Return ONLY the specific name of the language (e.g., "Korean", "English", "Japanese", "Chinese").
+No sentences, no explanation, no period.
+If the user switched from a previous language, detect the NEWEST language in the input.
+
+[Conversation Context]
+{context}"""),
+        ("user", "{input}")
+    ])
+    
+    chain = lang_prompt | llm_mini | StrOutputParser()
+    detected = (await chain.ainvoke({"input": user_msg, "context": context_str})).strip()
+    
+    # Validation/Fallback
+    if not detected or len(detected) > 20:
+        detected = "Korean"
+        
+    return {"detected_language": detected}
 
 
 async def analyze_input(state: AgentState):
@@ -222,20 +266,28 @@ async def analyze_input(state: AgentState):
 
 async def analyze_images(state: AgentState):
     images = state.get("images", [])
+    detected_lang = state.get("detected_language", "Korean")
+    
     if not images:
-        return {"image_analysis": "이미지 없음"}
+        return {"image_analysis": "이미지 없음" if detected_lang == "Korean" else "No images provided"}
 
-    system_msg = """당신은 냉철한 관찰자입니다. 주어진 이미지를 분석하여 다음 항목을 도출하세요:
-1. **상황 요약**: 무엇을 하는 상황인가? (예: 게임 중, 공부 중, 밥 먹는 중)
-2. **텍스트(OCR)**: 이미지 내에 있는 글자를 그대로 읽어낼 것. (문서, 화면 내용 등)
-3. **특이사항**: 사용자의 말과 모순될 수 있는 정황 포착. (예: "일한다"고 했는데 게임 화면임)
+    system_msg = f"""You are a cold and rational observer. Analyze the provided image(s) and provide the following in {detected_lang}:
+1. **Summary**: What is happening? (e.g., gaming, studying, eating)
+2. **Text (OCR)**: Transcribe any visible text exactly.
+3. **Observations**: Identify any contradictions or specific details.
 
-분석 결과는 팩트 위주로 건조하게 서술하십시오."""
+Be concise and factual."""
 
     messages = [
         SystemMessage(content=system_msg),
-        HumanMessage(content=[{"type": "text", "text": "이 이미지를 분석해줘."}]),
+        HumanMessage(content=[{"type": "text", "text": f"User's current message: {state['user_message']}"}]),
     ]
+
+    # Add history for context
+    history = state.get("history", [])
+    if history:
+        context_str = "\n".join([f"{m['role']}: {m['content']}" for m in history[-3:]])
+        messages[1].content.append({"type": "text", "text": f"\n[Recent Context]\n{context_str}"})
 
     for img in images:
         if img.startswith("http"):
@@ -264,26 +316,31 @@ async def analyze_images(state: AgentState):
     return {"image_analysis": result.content}
 
 
-def select_tools(state: AgentState):
-    return {"status": "selecting_tools"}
-
 
 async def execute_tools(state: AgentState):
-    search_tool = get_search_tool()
-    search_results = "검색 결과 없음"
+    detected_lang = state.get("detected_language", "Korean")
+    search_tool = get_search_tool(detected_lang)
+    search_results = "No search results"
 
     if search_tool:
-        # LLM으로 검색이 필요한 키워드 추출
+        # Recent history for context
+        history = state.get("history", [])
+        context_msgs = history[-3:] if history else []
+        context_str = "\n".join([f"{m['role']}: {m['content']}" for m in context_msgs])
+
         extract_prompt = ChatPromptTemplate.from_messages([
             ("system", """사용자 메시지에서 실시간 정보나 최신 유행어 검색이 필요한 키워드를 추출해.
-- 모르는 단어, 유행어(예: 두쫀쿠, 슬릭백 등), 특정 브랜드명, 사건 사고, 논문/자료 링크, 도서 정보 등.
+- 모르는 단어, 유행어, 특정 브랜드명, 사건 사고, 논문/자료 링크, 도서 정보 등.
 - 사용자가 구체적인 정보(링크, 제목, 출처)를 요구하거나 실시간 확인이 필요한 모든 상황.
 - 검색할 게 없으면 "NONE"이라고만 답해.
-- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해. (예: "자연어 처리 감성 분석 논문")"""),
+- 검색할 게 있으면 검색 쿼리 하나만 짧게 답해.
+
+[이전 대화 맥락]
+{context}"""),
             ("user", "{input}")
         ])
         extract_chain = extract_prompt | llm_mini | StrOutputParser()
-        search_query = (await extract_chain.ainvoke({"input": state["user_message"]})).strip()
+        search_query = (await extract_chain.ainvoke({"input": state["user_message"], "context": context_str})).strip()
 
         if search_query and search_query.upper() != "NONE":
             print(f"[Search] Query extracted: {search_query}")
@@ -308,20 +365,22 @@ async def generate_response(state: AgentState):
     from datetime import datetime
 
     # 게이지를 쓰지 않고, 항상 spicy 톤 고정
-    level_prompt = LEVEL_PROMPTS["spicy"]
+    level_prompt = "톤: 냉정하고 직설적으로. 듣기 싫은 말 거침없이. 해결책은 칼같이."
     today = datetime.now().strftime("%Y년 %m월 %d일")
 
     full_system_prompt = f"""{SYSTEM_PROMPT_BASE}
 {level_prompt}
 
-[현재 상황]
-오늘 날짜: {today}
-카테고리: {state['category']}
-실시간 정보: {state['factcheck']}
-이미지 분석(팩트): {state.get('image_analysis', '없음')}
-문서 내용: {state.get('pdf_text', '없음')}
+[Current Context]
+Current Date: {today}
+Category: {state['category']}
+Detected Language: {state.get('detected_language', 'Korean')} (You MUST respond in this language)
+Real-time Info: {state['factcheck']}
+Image Analysis: {state.get('image_analysis', 'None')}
+Document Content: {state.get('pdf_text', 'None')}
 
-[응답 규칙]
+[Response Guidelines]
+0. **CRITICAL**: Respond ONLY in the [Detected Language] specified below. Do not use Korean unless detected.
 1. 한 문장 최대 20자. 문장마다 반드시 줄바꿈. 카톡처럼 짧게 툭툭.
 2. 서술형 금지. 카톡 말투로.
 3. 매번 해결책 던지지 마. 대화하듯이 티키타카 해. 상황 파악 먼저.
@@ -338,6 +397,10 @@ async def generate_response(state: AgentState):
 14. 문서/포트폴리오 분석 중 사용자가 "알려줘" 등 모호한 반응일 때만 다음 섹션으로 이동해라. 특정 섹션에 대한 수정 요청이 있으면 그게 끝날 때까지 머물러라.
 15. 다음 단계를 제안하되, 사용자가 거부하거나 다른 걸 요구하면 바로 꺾어라. 니 논리보다 사용자 요구가 우선이다.
 16. 사용자가 제공하지 않은 구체적인 수치(%, 시간 등)를 마치 사실인 양 지어내지 마라. 지표 중심의 비평은 하되, 숫자는 사용자의 데이터로만 말하거나 물어봐라.
+17. Match the user's current language and conversational context. If the user switches languages, you should follow the switch. DO NOT stay locked in Korean.
+
+[Input Information]
+Detected Language: {state.get('detected_language', 'Korean')}
 """
 
     messages = [SystemMessage(content=full_system_prompt)]
@@ -376,6 +439,7 @@ async def generate_response(state: AgentState):
         current_content.append({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}})
 
     messages.append(HumanMessage(content=current_content))
+    messages.append(HumanMessage(content=f"[Final Instruction] Respond strictly in {state.get('detected_language', 'Korean')}."))
 
     content = ""
     async for chunk in llm.astream(messages):
@@ -390,7 +454,11 @@ def calculate_score(state: AgentState):
     """
     AG-12: 별도 노드로 분리하여 스트리밍 누수 방지
     """
-    reality_score = calculate_reality_score_logic(state["user_message"], state["diagnosis"])
+    reality_score = calculate_reality_score_logic(
+        state["user_message"], 
+        state["diagnosis"], 
+        state.get("detected_language", "Korean")
+    )
 
     share_card = {
         "summary": reality_score.get("summary", "팩폭 요약: 현실 도피 그만하고 정신 차려!"),
@@ -412,9 +480,10 @@ def build_graph():
     workflow.add_node("extract_pdf_text", extract_pdf_text)
     workflow.add_node("analyze_images", analyze_images)
     workflow.add_node("analyze_input", analyze_input)
-    workflow.add_node("select_tools", select_tools)
+    workflow.add_node("detect_language", detect_language)
     workflow.add_node("execute_tools", execute_tools)
     workflow.add_node("generate_response", generate_response)
+    workflow.add_node("calculate_score", calculate_score)
     workflow.set_entry_point("crisis_check")
 
     def route_crisis(x):
@@ -428,14 +497,15 @@ def build_graph():
     workflow.add_conditional_edges(
         "crisis_check",
         route_crisis,
-        {"crisis": END, "unclear": END, "safe": "extract_pdf_text"},
+        {"crisis": END, "unclear": END, "safe": "detect_language"},
     )
 
+    workflow.add_edge("detect_language", "extract_pdf_text")
     workflow.add_edge("extract_pdf_text", "analyze_images")
     workflow.add_edge("analyze_images", "analyze_input")
-    workflow.add_edge("analyze_input", "select_tools")
-    workflow.add_edge("select_tools", "execute_tools")
+    workflow.add_edge("analyze_input", "execute_tools")
     workflow.add_edge("execute_tools", "generate_response")
-    workflow.add_edge("generate_response", END)
+    workflow.add_edge("generate_response", "calculate_score")
+    workflow.add_edge("calculate_score", END)
 
     return workflow.compile()

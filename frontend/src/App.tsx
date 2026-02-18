@@ -20,7 +20,6 @@ export default function App() {
     profileImage?: string;
     email?: string;
     fontSize: 'small' | 'medium' | 'large';
-    tGauge: 'mild' | 'spicy' | 'hell';
     expertise: string;
     responseStyle: 'short' | 'long';
     privateMode: boolean;
@@ -100,6 +99,13 @@ export default function App() {
   const [isNextSessionPrivate, setIsNextSessionPrivate] = useState(false);
   const [isCurrentSessionPrivate, setIsCurrentSessionPrivate] = useState(false);
 
+  async function handleSessionDeleted(id: string) {
+    if (currentSessionId === id) {
+      setCurrentSessionId(null);
+    }
+    refreshSessions();
+  }
+
   return (
     <div className="app">
       <Sidebar
@@ -120,6 +126,7 @@ export default function App() {
         sessions={sessions}
         isNextSessionPrivate={isNextSessionPrivate}
         isCurrentSessionPrivate={isCurrentSessionPrivate}
+        onSessionDeleted={handleSessionDeleted}
       />
 
       <div className="mainLayout">
