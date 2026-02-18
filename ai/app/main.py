@@ -110,7 +110,6 @@ async def real_agent_generator(request: ChatRequest):
         "history": [msg.dict() for msg in request.history],
         "images": request.images or [],
         "pdfs": [p.dict() for p in request.pdfs] if request.pdfs else [],
-        "status": "starting",
         "current_section": "diagnosis",
     }
 
