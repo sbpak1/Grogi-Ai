@@ -259,3 +259,44 @@ authRouter.post("/dev-login", async (_req: Request, res: Response) => {
     res.status(500).json({ error: "DEV_AUTH_FAILED" });
   }
 });
+
+// DELETE /api/auth/withdrawal — 회원 탈퇴
+authRouter.delete("/withdrawal", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    // 세션, 메시지 등은 DB 수준에서 CASCADE 설정이 되어 있다면 자동으로 삭제됩니다.
+    // Prisma schema에서 User-Session-Message 관계에 따로 onDelete: Cascade를 설정하지 않았다면 명시적 삭제가 필요할 수 있습니다.
+    // 현재 스키마 확인 결과 @relation(fields, references)만 있고 onDelete 설정이 누락되어 있을 수 있으므로 연쇄 삭제를 수행합니다.
+
+    // 1. 세션 조회 (메시지도 함께 삭제하기 위함)
+    const sessions = await prisma.session.findMany({
+      where: { userId: req.userId },
+      select: { id: true }
+    });
+    const sessionIds = sessions.map(s => s.id);
+
+    // 2. 연관 데이터 삭제 (Prisma transaction)
+    await prisma.$transaction([
+      // 메시지의 공유 카드 삭제
+      prisma.shareCard.deleteMany({
+        where: { message: { sessionId: { in: sessionIds } } }
+      }),
+      // 메시지 삭제
+      prisma.message.deleteMany({
+        where: { sessionId: { in: sessionIds } }
+      }),
+      // 세션 삭제
+      prisma.session.deleteMany({
+        where: { userId: req.userId }
+      }),
+      // 사용자 삭제
+      prisma.user.delete({
+        where: { id: req.userId }
+      })
+    ]);
+
+    res.json({ success: true, message: "ACCOUNT_WITHDRAWAL_SUCCESS" });
+  } catch (err) {
+    console.error("회원 탈퇴 실패:", err);
+    res.status(500).json({ error: "WITHDRAWAL_FAILED" });
+  }
+});
