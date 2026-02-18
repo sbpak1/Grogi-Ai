@@ -1,9 +1,12 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useCallback } from 'react'
 import { chatStream, createSession, getChatHistory } from '../api'
 import { redirectToKakaoLogin } from '../lib/kakao'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import nomalImg from '../assets/nomal.png'
+import angryImg from '../assets/angry.png'
+import angelImg from '../assets/angel.png'
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -277,9 +280,99 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     }
   }
 
+  const renderInputForm = () => (
+    <form onSubmit={handleSend} className="chatInputBox" onPaste={handlePaste} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); e.dataTransfer.files && processFiles(e.dataTransfer.files) }}>
+      {(attachedImages.length > 0 || attachedPdfs.length > 0) && (
+        <div className="previewBar">
+          {attachedImages.map((img, i) => (
+            <div key={i} className="previewThumb">
+              <img src={`data:image/jpeg;base64,${img}`} alt="preview" />
+              <button type="button" className="removeBtn" onClick={() => setAttachedImages(prev => prev.filter((_, idx) => idx !== i))}>×</button>
+            </div>
+          ))}
+          {attachedPdfs.map((pdf, i) => (
+            <div key={i} className="previewThumb pdfThumb">
+              <div style={{ background: '#444', height: '100%', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>PDF</div>
+              <button type="button" className="removeBtn" onClick={() => setAttachedPdfs(prev => prev.filter((_, idx) => idx !== i))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="inputRow">
+        <textarea
+          ref={textareaRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              handleSend()
+            }
+          }}
+          placeholder="여기에 도움말 입력"
+          rows={1}
+        />
+      </div>
+
+      <div className="inputActions">
+        <div className="leftActions">
+          <button type="button" className="roundBtn" onClick={() => fileInputRef.current?.click()} title="이미지 업로드">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" /></svg>
+          </button>
+          <input
+            type="file"
+            multiple
+            ref={fileInputRef}
+            hidden
+            onChange={(e) => {
+              if (e.target.files) {
+                processFiles(e.target.files)
+                e.target.value = ''
+              }
+            }}
+          />
+        </div>
+
+        <div className="rightActions">
+          <button type="submit" className="roundBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0)} title="전송">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+
   return (
     <>
       <div className="chatWindowScroll" ref={chatWindowRef}>
+
+        {messages.length === 0 && !streaming && (
+          <div className="emptyState">
+            <div className="speechBubble">
+              <span>고민이 있으면 얘기해</span>
+              <span>해결책 줄게</span>
+            </div>
+            <img
+              className="characterImg"
+              src={nomalImg}
+              alt="Grogi"
+              onMouseEnter={(e) => {
+                const rand = Math.random() < 0.5 ? angryImg : angelImg;
+                (e.target as HTMLImageElement).src = rand;
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLImageElement).src = nomalImg;
+              }}
+            />
+            <div className="inputArea emptyStateInput">
+              {renderInputForm()}
+              <p className="emptyStateDisclaimer">
+                그로기는 공감 대신 이성적인 판단으로 해결책을 제시해주는 AI입니다. 너무 상처 받지 않으시길 바랍니다.
+              </p>
+            </div>
+          </div>
+        )}
 
         {messages.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
@@ -307,68 +400,11 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
         {streaming && <div className="msg msg-system">응답 중...</div>}
       </div>
 
-      <div className="inputArea">
-        <form onSubmit={handleSend} className="chatInputBox" onPaste={handlePaste} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); e.dataTransfer.files && processFiles(e.dataTransfer.files) }}>
-          {(attachedImages.length > 0 || attachedPdfs.length > 0) && (
-            <div className="previewBar">
-              {attachedImages.map((img, i) => (
-                <div key={i} className="previewThumb">
-                  <img src={`data:image/jpeg;base64,${img}`} alt="preview" />
-                  <button type="button" className="removeBtn" onClick={() => setAttachedImages(prev => prev.filter((_, idx) => idx !== i))}>×</button>
-                </div>
-              ))}
-              {attachedPdfs.map((pdf, i) => (
-                <div key={i} className="previewThumb pdfThumb">
-                  <div style={{ background: '#444', height: '100%', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>PDF</div>
-                  <button type="button" className="removeBtn" onClick={() => setAttachedPdfs(prev => prev.filter((_, idx) => idx !== i))}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="inputRow">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSend()
-                }
-              }}
-              placeholder="여기에 도움말 입력"
-              rows={1}
-            />
-          </div>
-
-          <div className="inputActions">
-            <div className="leftActions">
-              <button type="button" className="roundBtn" onClick={() => fileInputRef.current?.click()} title="이미지 업로드">
-                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z" /></svg>
-              </button>
-              <input
-                type="file"
-                multiple
-                ref={fileInputRef}
-                hidden
-                onChange={(e) => {
-                  if (e.target.files) {
-                    processFiles(e.target.files)
-                    e.target.value = '' // 같은 파일을 다시 선택할 수 있도록 초기화
-                  }
-                }}
-              />
-            </div>
-
-            <div className="rightActions">
-              <button type="submit" className="roundBtn" disabled={streaming || (!input.trim() && attachedImages.length === 0)} title="전송">
-                <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
-              </button>
-            </div>
-          </div>
-        </form>
-      </div>
+      {(messages.length > 0 || streaming) && (
+        <div className="inputArea">
+          {renderInputForm()}
+        </div>
+      )}
     </>
   )
 }
