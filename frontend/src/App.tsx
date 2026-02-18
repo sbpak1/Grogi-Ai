@@ -113,6 +113,11 @@ export default function App() {
           onLogout={handleLogout}
           profile={profile}
           onProfileUpdate={(updated) => setProfile((prev) => prev ? { ...prev, ...updated } : prev)}
+          onHome={() => {
+            setCurrentSessionId(null);
+            setIsNextSessionPrivate(false);
+            setIsCurrentSessionPrivate(false);
+          }}
         />
         <main className="chatContainer">
           <Chat
