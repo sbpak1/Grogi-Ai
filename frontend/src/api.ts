@@ -269,6 +269,9 @@ export function chatStream(
     openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
     onclose() {
       finish()
+      // fetchEventSource는 onclose에서 throw하지 않으면 자동 재연결(=POST 재전송)함
+      // 이를 방지하기 위해 반드시 throw 필요
+      throw new Error('SSE stream closed')
     },
   })
 
