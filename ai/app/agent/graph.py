@@ -358,7 +358,7 @@ async def execute_tools(state: AgentState):
                 print(f"[Search Error] {e}")
                 search_results = f"검색 중 오류 발생: {str(e)}"
 
-    return {"factcheck": search_results, "status": "executing_tools"}
+    return {"factcheck": search_results}
 
 
 async def generate_response(state: AgentState):
