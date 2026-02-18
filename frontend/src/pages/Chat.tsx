@@ -383,7 +383,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
               handleSend()
             }
           }}
-          placeholder="여기에 도움말 입력"
+          placeholder="Grogi와 대화하기"
           rows={1}
         />
       </div>

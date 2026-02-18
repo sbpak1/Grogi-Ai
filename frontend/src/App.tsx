@@ -13,7 +13,9 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false)
   const [isTermsOpen, setIsTermsOpen] = useState(false)
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(
+    () => sessionStorage.getItem('currentSessionId')
+  )
   const [sessions, setSessions] = useState<Array<{ id: string; title?: string; createdAt: string; privateMode?: boolean; messages?: Array<{ content: string }> }>>([])
   const [profile, setProfile] = useState<{
     nickname?: string;
@@ -24,6 +26,14 @@ export default function App() {
     responseStyle: 'short' | 'long';
     privateMode: boolean;
   } | null>(null)
+
+  useEffect(() => {
+    if (currentSessionId) {
+      sessionStorage.setItem('currentSessionId', currentSessionId)
+    } else {
+      sessionStorage.removeItem('currentSessionId')
+    }
+  }, [currentSessionId])
 
   useEffect(() => {
     if (profile?.fontSize) {
