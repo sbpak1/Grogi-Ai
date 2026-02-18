@@ -100,7 +100,7 @@ function isIntermediateToken(text: string) {
 }
 
 export function chatStream(
-  payload: { sessionId?: string; session_id?: string; message: string; images?: string[]; ocr_text?: string; pdfs?: Array<{ filename: string; content: string }>; privateMode?: boolean },
+  payload: { sessionId?: string; session_id?: string; message: string; messageId?: string; images?: string[]; ocr_text?: string; pdfs?: Array<{ filename: string; content: string }>; privateMode?: boolean },
   handlers: {
     onMessage: (chunk: string) => void;
     onDone?: () => void;
@@ -114,6 +114,7 @@ export function chatStream(
   const token = localStorage.getItem('token')
   const normalizedPayload = {
     sessionId: payload.sessionId || payload.session_id,
+    messageId: payload.messageId,
     message: payload.message,
     images: payload.images,
     ocr_text: payload.ocr_text,
@@ -260,10 +261,12 @@ export function chatStream(
       }
     },
     onerror(err) {
+      // 치명적 에러로 간주하여 재시도 하지 않음
       if (abortController.signal.aborted) return
       handlers.onError?.(err)
-      throw err
+      throw err // 이 라이브러리는 throw하면 재시도를 중단함
     },
+    openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
     onclose() {
       finish()
     },

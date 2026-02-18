@@ -29,15 +29,18 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const chatWindowRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const isSendingRef = useRef(false) // 중복 전송 방지용 Ref
 
   // 컴포넌트 언마운트 시 SSE 연결 정리
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      isSendingRef.current = false
     }
   }, [])
 
   const [thinkingImgIdx, setThinkingImgIdx] = useState(0)
+  const [currentIdleImg, setCurrentIdleImg] = useState(nomalImg)
   const thinkingImgs = [nomalImg, angryImg, angelImg]
 
   useEffect(() => {
@@ -48,9 +51,25 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       }, 300)
     } else {
       setThinkingImgIdx(0)
+      isSendingRef.current = false // 스트리밍이 끝나면 락 해제 (안전장치)
     }
     return () => clearInterval(interval)
   }, [streaming])
+
+  // Idle state random expression animation
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>
+    if (messages.length === 0 && !streaming) {
+      interval = setInterval(() => {
+        const otherImgs = [nomalImg, angryImg, angelImg];
+        const randomImg = otherImgs[Math.floor(Math.random() * otherImgs.length)];
+        setCurrentIdleImg(randomImg);
+      }, 3000)
+    } else {
+      setCurrentIdleImg(nomalImg)
+    }
+    return () => clearInterval(interval)
+  }, [messages.length, streaming])
 
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
@@ -95,9 +114,13 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
 
   async function handleSend(e?: React.FormEvent) {
     if (e) e.preventDefault()
+
+    // 동기적 중복 방지 체크
+    if (isSendingRef.current) return
+    if (streaming) return
+
     const text = input.trim()
     if (!text && attachedImages.length === 0 && attachedPdfs.length === 0) return
-    if (streaming) return
 
     const token = localStorage.getItem('token')
     if (!token) {
@@ -105,6 +128,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       return
     }
 
+    isSendingRef.current = true // 즉시 잠금
     setStreaming(true)
     setAnalysisPreview(null)
 
@@ -143,6 +167,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       abortRef.current = chatStream(
         {
           session_id: currentSessionId!,
+          messageId: self.crypto.randomUUID(),
           message: text || (currentImages.length > 0 || currentPdfs.length > 0 ? '파일 분석해줘' : ''),
           images: currentImages.length > 0 ? currentImages : undefined,
           pdfs: currentPdfs.length > 0 ? currentPdfs.map(p => ({ filename: p.name, content: p.base64 })) : undefined,
@@ -232,6 +257,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       )
     } catch (err) {
       setStreaming(false)
+      isSendingRef.current = false
       setMessages((prev) => [...prev, { role: 'system', content: '전송 실패' }])
     }
   }
@@ -374,14 +400,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             </div>
             <img
               className="characterImg"
-              src={nomalImg}
+              src={currentIdleImg}
               alt="Grogi"
-              onMouseEnter={(e) => {
+              onMouseEnter={() => {
                 const rand = Math.random() < 0.5 ? angryImg : angelImg;
-                (e.target as HTMLImageElement).src = rand;
+                setCurrentIdleImg(rand);
               }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLImageElement).src = nomalImg;
+              onMouseLeave={() => {
+                setCurrentIdleImg(nomalImg);
               }}
             />
             <div className="inputArea emptyStateInput">
