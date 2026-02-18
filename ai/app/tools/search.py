@@ -1,11 +1,18 @@
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
-def get_search_tool():
+def get_search_tool(lang: str = "Korean"):
     """
     AG-10: DuckDuckGo 무료 검색 도구 (링크 포함)
     """
-    wrapper = DuckDuckGoSearchAPIWrapper(region="kr-kr", time="d", max_results=5)
+    region_map = {
+        "Korean": "kr-kr",
+        "English": "us-en",
+        "Japanese": "jp-jp",
+        "Chinese": "cn-zh"
+    }
+    region = region_map.get(lang, "wt-wt") # wt-wt is "world"
+    wrapper = DuckDuckGoSearchAPIWrapper(region=region, time="d", max_results=5)
     return DuckDuckGoSearchResults(api_wrapper=wrapper)
 
 def get_statistics_search(category: str, keyword: str):

@@ -41,6 +41,7 @@ export const sessionService = {
                 where: {
                     id: sessionId,
                     userId,
+                    isDeleted: false,
                 },
                 include: {
                     messages: {
@@ -65,7 +66,8 @@ export const sessionService = {
             return await prisma.session.findMany({
                 where: {
                     userId,
-                    privateMode: false // 비밀 채팅은 목록에서 제외
+                    privateMode: false, // 비밀 채팅은 목록에서 제외
+                    isDeleted: false,
                 },
                 orderBy: { createdAt: "desc" },
                 include: {
@@ -89,6 +91,21 @@ export const sessionService = {
                     userId,
                 },
                 data: { privateMode },
+            });
+        } catch (error) {
+            if (!isPrismaUnavailableError(error)) throw error;
+            throw error;
+        }
+    },
+
+    async softDeleteSession(sessionId: string, userId: string) {
+        try {
+            return await prisma.session.update({
+                where: {
+                    id: sessionId,
+                    userId,
+                },
+                data: { isDeleted: true },
             });
         } catch (error) {
             if (!isPrismaUnavailableError(error)) throw error;

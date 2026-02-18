@@ -42,6 +42,7 @@ model Session {
   title       String?                               // 대화방 제목 (첫 메시지 요약)
   category    String    @default("etc")
   privateMode Boolean   @default(false)            // 이 대화방의 프라이빗 여부
+  isDeleted   Boolean   @default(false)            @map("is_deleted") // 소프트 삭제 여부
   createdAt   DateTime  @default(now()) @map("created_at")
   user      User      @relation(fields: [userId], references: [id])
   messages  Message[]                             // 1:N — 세션 내 메시지들
