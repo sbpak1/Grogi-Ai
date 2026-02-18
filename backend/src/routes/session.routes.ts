@@ -11,6 +11,9 @@ export const sessionRouter = Router();
 
 sessionRouter.use(authMiddleware);
 
+// 대화 삭제 (소프트 삭제)
+sessionRouter.delete("/:id", sessionController.remove);
+
 sessionRouter.post("/", sessionController.create);
 sessionRouter.get("/", sessionController.list);
 sessionRouter.get("/:id", sessionController.getDetail);
