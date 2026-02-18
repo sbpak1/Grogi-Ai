@@ -196,10 +196,20 @@ export const chatService = {
         }
     },
 
-    async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any) {
+    async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any, messageId?: string) {
         try {
+            // Idempotency check: if messageId is provided, check if it exists
+            if (messageId) {
+                const existing = await prisma.message.findUnique({ where: { id: messageId } });
+                if (existing) {
+                    console.log(`[chatService] Duplicate message detected (id: ${messageId}). Skipping save.`);
+                    return existing;
+                }
+            }
+
             const message = await prisma.message.create({
                 data: {
+                    id: messageId, // Optional: if provided, use it. If not, Prisma generates cuid
                     sessionId,
                     role,
                     content,
@@ -279,6 +289,14 @@ export const chatService = {
         );
 
         return response.data;
+    },
+
+    async getMessageById(id: string) {
+        try {
+            return await prisma.message.findUnique({ where: { id } });
+        } catch {
+            return null;
+        }
     },
 
     async saveShareCard(messageId: string, summary: string, score: number, actions: any) {
