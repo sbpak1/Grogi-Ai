@@ -23,7 +23,6 @@ class AgentState(TypedDict):
     user_message: str
     category: str
     history: List[dict]
-    status: str
     current_section: str
     diagnosis: str
     factcheck: str
@@ -447,7 +446,6 @@ Detected Language: {state.get('detected_language', 'Korean')}
 
     return {
         "diagnosis": content,
-        "status": "generated"
     }
 
 def calculate_score(state: AgentState):
@@ -469,7 +467,6 @@ def calculate_score(state: AgentState):
     return {
         "reality_score": reality_score,
         "share_card": share_card,
-        "status": "completed",
     }
 
 
