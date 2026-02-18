@@ -13,7 +13,6 @@ async def test_agent_cli():
     
     # 초기 세팅
     history = []
-    level = "spicy"
     category = "career"
     
     while True:
@@ -90,7 +89,6 @@ async def test_agent_cli():
         state = {
             "session_id": "test_session",
             "user_message": user_input,
-            "level": level,
             "category": category,
             "history": history,
             "images": images,

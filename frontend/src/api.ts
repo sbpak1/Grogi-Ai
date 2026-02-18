@@ -44,7 +44,6 @@ export async function updateProfile(data: { nickname?: string; profileImage?: st
 
 export async function updateSettings(settings: {
   fontSize?: 'small' | 'medium' | 'large';
-  tGauge?: 'mild' | 'spicy' | 'hell';
   expertise?: 'career' | 'love' | 'finance' | 'self' | 'etc';
   responseStyle?: 'short' | 'long';
   privateMode?: boolean;
@@ -58,8 +57,8 @@ export async function updateSessionPrivacy(sessionId: string, privateMode: boole
   return res.data
 }
 
-export async function createSession(privateMode = false, category = 'etc', level = 'spicy') {
-  const res = await api.post('/api/sessions', { category, level, privateMode })
+export async function createSession(privateMode = false, category = 'etc') {
+  const res = await api.post('/api/sessions', { category, privateMode })
   return { ...res.data, session_id: res.data?.session_id || res.data?.id }
 }
 
