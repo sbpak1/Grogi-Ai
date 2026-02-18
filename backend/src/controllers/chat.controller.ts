@@ -74,6 +74,32 @@ export const chatController = {
             let realityScore: any = null;
             let shareCard: any = null;
             let doneSentByUpstream = false;
+            let messageSaved = false;
+
+            async function persistAssistantMessage() {
+                if (messageSaved || !fullAssistantMessage || !context.persist) return;
+                messageSaved = true;
+                try {
+                    const savedMsg = await chatService.saveMessage(
+                        resolvedSessionId,
+                        "assistant",
+                        fullAssistantMessage,
+                        realityScore?.total || 0,
+                        realityScore
+                    );
+
+                    if (shareCard && savedMsg?.id) {
+                        await chatService.saveShareCard(
+                            savedMsg.id,
+                            shareCard.summary,
+                            shareCard.score,
+                            shareCard.actions
+                        );
+                    }
+                } catch (persistError) {
+                    console.error("Chat persistence error:", persistError);
+                }
+            }
 
             stream.on("data", (chunk: Buffer) => {
                 const lines = chunk.toString().split("\n");
@@ -107,28 +133,7 @@ export const chatController = {
             stream.pipe(res, { end: false });
 
             stream.on("end", async () => {
-                try {
-                    if (fullAssistantMessage && context.persist) {
-                        const savedMsg = await chatService.saveMessage(
-                            resolvedSessionId,
-                            "assistant",
-                            fullAssistantMessage,
-                            realityScore?.total || 0,
-                            realityScore
-                        );
-
-                        if (shareCard && savedMsg?.id) {
-                            await chatService.saveShareCard(
-                                savedMsg.id,
-                                shareCard.summary,
-                                shareCard.score,
-                                shareCard.actions
-                            );
-                        }
-                    }
-                } catch (persistError) {
-                    console.error("Chat persistence error:", persistError);
-                }
+                await persistAssistantMessage();
 
                 if (!doneSentByUpstream) {
                     res.write("data: [DONE]\n\n");
@@ -145,10 +150,11 @@ export const chatController = {
                 res.end();
             });
 
-            req.on("close", () => {
+            req.on("close", async () => {
                 if (!res.writableEnded) {
                     stream.destroy();
                 }
+                await persistAssistantMessage();
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);
