@@ -73,6 +73,11 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
 
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
+    // 세션 변경 시 진행 중인 스트림 정리
+    abortRef.current?.abort()
+    isSendingRef.current = false
+    setStreaming(false)
+
     if (sessionId) {
       // 새로 시작된 세션인 경우 히스토리 로드를 건너뜀 (이미 optimistic하게 메시지가 채워짐)
       if (justStartedRef.current) {
