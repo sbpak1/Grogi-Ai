@@ -373,9 +373,9 @@ async def generate_response(state: AgentState):
 
 [Current Context]
 Current Date: {today}
-Category: {state['category']}
+Category: {state.get('category', 'etc')}
 Detected Language: {state.get('detected_language', 'Korean')} (You MUST respond in this language)
-Real-time Info: {state['factcheck']}
+Real-time Info: {state.get('factcheck', 'No search results')}
 Image Analysis: {state.get('image_analysis', 'None')}
 Document Content: {state.get('pdf_text', 'None')}
 
