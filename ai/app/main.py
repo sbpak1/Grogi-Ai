@@ -222,12 +222,21 @@ async def chat_endpoint(request: ChatRequest):
 @app.post("/agent/title")
 async def title_endpoint(request: TitleRequest):
     try:
+        # 1. 언어 먼저 감지
+        lang_prompt = ChatPromptTemplate.from_messages([
+            ("system", "Detect the language of the input. Return ONLY the language name in English (e.g. Korean, English)."),
+            ("user", "{input}")
+        ])
+        lang_chain = lang_prompt | llm_mini | StrOutputParser()
+        detected_lang = (await lang_chain.ainvoke({"input": request.message})).strip()
+
+        # 2. 감지된 언어에 맞춰 제목 생성
         title_prompt = ChatPromptTemplate.from_messages([
-            ("system", """사용자의 첫 메시지를 보고 대화방의 제목을 창의적으로 지어줘.
-- 결과는 15자 이내로 짧고 강렬하게.
-- 이모지는 절대 쓰지마. 문장으로만 작성해
-- 조사나 불필요한 단어는 빼고 핵심만. (예: "에너지 드링크 과유불급", "카페인 중독 경고")
-- 제목만 딱 답해."""),
+            ("system", f"""Create a punchy chat room title based on the user's message.
+- MAX 15 characters.
+- NO emojis.
+- Language: {detected_lang}
+- Only return the title itself."""),
             ("user", "{input}")
         ])
         chain = title_prompt | llm_mini | StrOutputParser()
