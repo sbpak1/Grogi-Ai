@@ -268,10 +268,14 @@ export function chatStream(
     },
     openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
     onclose() {
+      if (!finished) {
+        // [DONE] 전에 연결이 끊김 → 에러 처리 (탭 전환 중 브라우저가 끊은 경우 등)
+        handlers.onError?.(new Error('연결이 끊어졌습니다. 다시 시도해주세요.'))
+        finished = true
+      }
       finish()
       // fetchEventSource는 onclose에서 throw하지 않으면 자동 재연결(=POST 재전송)함
-      // 이를 방지하기 위해 반드시 throw 필요
-      throw new Error('SSE stream closed')
+      throw new Error('SSE closed')
     },
   })
 
