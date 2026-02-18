@@ -869,6 +869,28 @@ body {
   width: 100%;
 }
 
+.popoverFooterActions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 8px;
+}
+
+.withdrawalBtn {
+  background: none;
+  border: none;
+  color: #747775;
+  font-size: 0.75rem;
+  padding: 8px;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.withdrawalBtn:hover {
+  color: #f2b8b5;
+}
+
 .footerBtn.single {
   width: 100%;
   display: flex;
