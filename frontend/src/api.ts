@@ -274,8 +274,7 @@ export function chatStream(
         finished = true
       }
       finish()
-      // fetchEventSource는 onclose에서 throw하지 않으면 자동 재연결(=POST 재전송)함
-      throw new Error('SSE closed')
+      abortController.abort() // throw 대신 abort로 재연결 방지 (콘솔 에러 없음)
     },
   })
 
