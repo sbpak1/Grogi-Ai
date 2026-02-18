@@ -34,6 +34,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const abortRef = useRef<AbortController | null>(null)
   const isSendingRef = useRef(false) // 중복 전송 방지용 Ref
 
+  // 이미지 프리로드 (메모리 캐싱)
+  useEffect(() => {
+    [nomalImg, angryImg, angelImg].forEach(src => {
+      const img = new Image()
+      img.src = src
+    })
+  }, [])
+
   // 컴포넌트 언마운트 시 SSE 연결 정리
   useEffect(() => {
     return () => {
@@ -64,9 +72,11 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     let interval: ReturnType<typeof setInterval>
     if (messages.length === 0 && !streaming && !loadingHistory) {
       interval = setInterval(() => {
-        const otherImgs = [nomalImg, angryImg, angelImg];
-        const randomImg = otherImgs[Math.floor(Math.random() * otherImgs.length)];
-        setCurrentIdleImg(randomImg);
+        const allImgs = [nomalImg, angryImg, angelImg];
+        setCurrentIdleImg(prev => {
+          const others = allImgs.filter(img => img !== prev)
+          return others[Math.floor(Math.random() * others.length)]
+        })
       }, 3000)
     } else {
       setCurrentIdleImg(nomalImg)
@@ -266,7 +276,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
               if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification('🔥 그로기 답변 완료', {
                   body: '답변이 준비됐어. 확인해봐.',
-                  icon: '/nomal.png',
+                  icon: nomalImg,
                 })
               }
               // 돌아왔을 때 토스트 표시
