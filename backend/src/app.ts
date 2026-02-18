@@ -8,6 +8,8 @@
  */
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { env } from "./lib/env";
 import { authRouter } from "./routes/auth.routes";
 import { sessionRouter } from "./routes/session.routes";
@@ -35,6 +37,19 @@ app.use(
     credentials: true, // 쿠키/Authorization 헤더 허용
   })
 );
+
+// ─── 보안 헤더 ──────────────────────────────────
+app.use(helmet());
+
+// ─── Rate Limiting ──────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15분
+  max: 100, // IP당 최대 100회
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "TOO_MANY_REQUESTS" },
+});
+app.use("/api/", apiLimiter);
 
 // ─── 공통 미들웨어 ──────────────────────────────
 app.use(express.json({ limit: '15mb' })); // PDF base64 포함 대용량 요청 허용

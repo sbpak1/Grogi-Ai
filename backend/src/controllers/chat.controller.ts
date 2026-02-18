@@ -133,13 +133,18 @@ export const chatController = {
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);
-            res.status(500).json({ error: error.message || "message send failed" });
+            res.status(500).json({ error: "메시지 전송에 실패했습니다" });
         }
     },
 
     async getHistory(req: Request, res: Response) {
         const sessionId = req.params.sessionId as string;
         try {
+            const isOwner = await chatService.verifySessionOwner(sessionId, req.userId!);
+            if (!isOwner) {
+                res.status(403).json({ error: "해당 세션에 접근 권한이 없습니다" });
+                return;
+            }
             const messages = await chatService.getChatHistory(sessionId);
             res.json({ messages });
         } catch {

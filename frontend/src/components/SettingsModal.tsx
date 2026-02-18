@@ -12,13 +12,13 @@ interface SettingsModalProps {
         responseStyle: 'short' | 'long'
         privateMode: boolean
     }
-    onUpdate: (newSettings: any) => void
+    onUpdate: (newSettings: Partial<SettingsModalProps['settings']>) => void
 }
 
 export default function SettingsModal({ isOpen, onClose, onStartPrivateChat, settings, onUpdate }: SettingsModalProps) {
     if (!isOpen) return null
 
-    async function handleSettingChange(key: string, value: any) {
+    async function handleSettingChange(key: string, value: string | boolean) {
         try {
             const updated = await updateSettings({ [key]: value })
             onUpdate(updated)

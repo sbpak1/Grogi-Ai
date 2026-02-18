@@ -44,7 +44,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     // 2. "Bearer " 접두사(7글자) 제거 후 토큰만 추출
     const token = header.slice(7);
     // 3. JWT_SECRET으로 서명 검증 + 디코딩
-    const payload = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+      issuer: "grogi-api",
+      audience: "grogi-frontend",
+    }) as JwtPayload;
     // 4. 검증 성공 → req에 userId 저장 후 다음 핸들러로
     req.userId = payload.userId;
     next();

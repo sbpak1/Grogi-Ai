@@ -1,17 +1,5 @@
 import { prisma } from "../lib/prisma";
-
-function isPrismaUnavailableError(error: any) {
-    if (!error) return false;
-    const code = String(error.code || "");
-    const message = String(error.message || "");
-    return (
-        code === "P2021" ||
-        code === "P1001" ||
-        code === "ECONNREFUSED" ||
-        message.includes("does not exist") ||
-        message.includes("ECONNREFUSED")
-    );
-}
+import { isPrismaUnavailableError } from "../lib/prisma-errors";
 
 function isUserNotFoundError(error: any) {
     if (!error) return false;
