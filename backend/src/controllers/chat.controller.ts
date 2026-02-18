@@ -4,7 +4,7 @@ import { chatService } from "../services/chat.service";
 
 export const chatController = {
     async send(req: Request, res: Response) {
-        const { sessionId, message, images, ocr_text, pdfs, privateMode } = req.body;
+        const { sessionId, message, messageId, images, ocr_text, pdfs, privateMode } = req.body;
 
         if (images && images.length > 5) {
             res.status(400).json({ error: "이미지는 최대 5장까지 가능합니다" });
@@ -32,10 +32,29 @@ export const chatController = {
                 ? sessionId.trim()
                 : crypto.randomUUID();
 
+        // 1. Idempotency Check (Early Return)
+        // If messageId is provided, check if it already exists in DB.
+        // If it exists, we assume it's a duplicate request (retry) and we should stop.
+        // For a full implementation, we might want to return the previous response, but for now, 
+        // we'll just prevent reprocessing and return a 200 OK or specific code.
+        // However, since this is an SSE stream, we can't easily "replay" the stream. 
+        // We will log it and proceed with caution, or if it's strictly a duplicate send, we stop.
+        if (messageId) {
+            const existing = await chatService.getMessageById(messageId);
+            if (existing) {
+                console.log(`[chatController] Idempotency check: Message ${messageId} already exists. Returning 200 OK to stop retry.`);
+                // Client likely retried, but we already have it. 
+                // We can either ignore (and let client receive nothing but success) or send a specific event.
+                // For now, let's just end the response to stop further processing.
+                res.status(200).json({ message: "Already processed" });
+                return;
+            }
+        }
+
         try {
             const context = await chatService.ensureSessionForChat(resolvedSessionId, req.userId, !!privateMode);
             if (context.persist) {
-                await chatService.saveMessage(resolvedSessionId, "user", message);
+                await chatService.saveMessage(resolvedSessionId, "user", message, undefined, undefined, messageId);
             }
 
             const stream = await chatService.getAiResponseStream(
