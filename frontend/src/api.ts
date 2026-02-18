@@ -261,9 +261,9 @@ export function chatStream(
       }
     },
     onerror(err) {
-      // 치명적 에러로 간주하여 재시도 하지 않음
-      if (abortController.signal.aborted) return
-      handlers.onError?.(err)
+      if (!abortController.signal.aborted && !finished) {
+        handlers.onError?.(err)
+      }
       throw err // 이 라이브러리는 throw하면 재시도를 중단함
     },
     openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
