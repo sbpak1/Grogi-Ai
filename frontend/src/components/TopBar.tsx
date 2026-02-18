@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { updateProfile } from '../api'
+import { updateProfile, withdrawAccount } from '../api'
 import { redirectToKakaoLogin } from '../lib/kakao'
 
 
@@ -50,6 +50,17 @@ export default function TopBar({ onLogout, profile, onProfileUpdate, onHome, onO
 
     function triggerLogin() {
         redirectToKakaoLogin()
+    }
+
+    async function handleWithdraw() {
+        if (!window.confirm('정말로 탈퇴하시겠습니까? 관련 데이터가 모두 삭제되며 복구할 수 없습니다.')) return
+        try {
+            await withdrawAccount()
+            alert('탈퇴 처리가 완료되었습니다.')
+            onLogout()
+        } catch (err) {
+            alert('탈퇴 처리 중 오류가 발생했습니다.')
+        }
     }
 
     const defaultAvatar = "https://lh3.googleusercontent.com/a/default-user=s64"
@@ -144,15 +155,20 @@ export default function TopBar({ onLogout, profile, onProfileUpdate, onHome, onO
                                 </button>
                             </div>
                         ) : (
-                            <button className="footerBtn single" onClick={() => {
-                                setIsPopoverOpen(false)
-                                onLogout()
-                            }}>
-                                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
-                                </svg>
-                                <span>로그아웃</span>
-                            </button>
+                            <div className="popoverFooterActions">
+                                <button className="footerBtn single" onClick={() => {
+                                    setIsPopoverOpen(false)
+                                    onLogout()
+                                }}>
+                                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+                                    </svg>
+                                    <span>로그아웃</span>
+                                </button>
+                                <button className="withdrawalBtn" onClick={handleWithdraw}>
+                                    회원 탈퇴
+                                </button>
+                            </div>
                         )}
                     </div>
 
