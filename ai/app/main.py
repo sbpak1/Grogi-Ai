@@ -142,9 +142,7 @@ async def real_agent_generator(request: ChatRequest):
 
                 # LangGraph 노드 종료 이벤트만 처리 (metadata에 langgraph_node가 있는 경우)
                 if event.get("metadata", {}).get("langgraph_node") != node_name:
-                    # 노드 자체가 아닌 내부 체인 종료는 무시
-                    if node_name != "generate_response":
-                        continue
+                    continue
 
                 if node_name == "crisis_check":
                     res = event["data"]["output"]
