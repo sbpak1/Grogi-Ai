@@ -24,6 +24,8 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
   const justStartedRef = useRef(false);
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
@@ -137,6 +139,11 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     setStreaming(true)
     setAnalysisPreview(null)
 
+    // 알림 권한 요청 (최초 1회, 사용자가 허용/거부하면 다시 묻지 않음)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
     // 유저 메시지 추가
     const parts: string[] = []
     if (attachedImages.length > 0) parts.push(`[이미지 ${attachedImages.length}장]`)
@@ -247,6 +254,23 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             // 첫 메시지거나 세션이 시작된 경우 사이드바 갱신 유도 (currentSessionId 사용으로 클로저 문제 해결)
             if (currentSessionId) {
               onSessionStarted(currentSessionId)
+            }
+            // 다른 탭에 있을 때 브라우저 알림 + 인앱 토스트
+            if (document.visibilityState === 'hidden') {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('🔥 그로기 답변 완료', {
+                  body: '답변이 준비됐어. 확인해봐.',
+                  icon: '/nomal.png',
+                })
+              }
+              // 돌아왔을 때 토스트 표시
+              const showToast = () => {
+                setToast('그로기가 답변을 완료했어요!')
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+                toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+                document.removeEventListener('visibilitychange', showToast)
+              }
+              document.addEventListener('visibilitychange', showToast)
             }
           },
           onError(err) {
@@ -395,6 +419,13 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
 
   return (
     <>
+      {/* 인앱 토스트 알림 */}
+      {toast && (
+        <div className="toast-notification" onClick={() => setToast(null)}>
+          <span className="toast-icon">🔥</span>
+          <span>{toast}</span>
+        </div>
+      )}
       <div className="chatWindowScroll" ref={chatWindowRef}>
 
         {messages.length === 0 && !streaming && (
