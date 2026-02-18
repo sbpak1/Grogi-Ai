@@ -13,9 +13,11 @@ interface TopBarProps {
     } | null
     onProfileUpdate?: (updated: { nickname?: string; profileImage?: string; email?: string }) => void
     onHome?: () => void
+    onOpenPrivacy?: () => void
+    onOpenTerms?: () => void
 }
 
-export default function TopBar({ onLogout, profile, onProfileUpdate, onHome }: TopBarProps) {
+export default function TopBar({ onLogout, profile, onProfileUpdate, onHome, onOpenPrivacy, onOpenTerms }: TopBarProps) {
     const [isPopoverOpen, setIsPopoverOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [editNickname, setEditNickname] = useState('')
@@ -115,17 +117,6 @@ export default function TopBar({ onLogout, profile, onProfileUpdate, onHome }: T
                                 alt="large avatar"
                                 className="largeAvatar"
                             />
-                            <button className="cameraIconBtn" onClick={() => {
-                                if (!isEditing) setIsEditing(true);
-                                else {
-                                    const url = prompt('이미지 URL을 입력하세요', editProfileImage);
-                                    if (url !== null) setEditProfileImage(url);
-                                }
-                            }}>
-                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 12m-3.2 0a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0 -6.4 0M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5z" />
-                                </svg>
-                            </button>
                         </div>
 
                         {isEditing ? (
@@ -167,9 +158,9 @@ export default function TopBar({ onLogout, profile, onProfileUpdate, onHome }: T
 
                     {!isEditing && (
                         <div className="popoverBottomLinks">
-                            <span>개인정보처리방침</span>
+                            <span onClick={onOpenPrivacy}>개인정보처리방침</span>
                             <span>•</span>
-                            <span>서비스 약관</span>
+                            <span onClick={onOpenTerms}>서비스 약관</span>
                         </div>
                     )}
                 </div>

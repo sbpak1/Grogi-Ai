@@ -857,23 +857,6 @@ body {
   object-fit: cover;
 }
 
-.cameraIconBtn {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  background-color: #2b2c2f;
-  border: 1px solid #444746;
-  border-radius: 50%;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #e3e3e3;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
 .greetingText {
   font-size: 1.25em;
   font-weight: 400;
@@ -972,4 +955,92 @@ body {
 .footerBtn.save {
   background-color: var(--google-blue);
   color: #000;
+}
+
+/* Modal Base Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modalContent {
+  background-color: #2b2c2f;
+  border: 1px solid #444746;
+  border-radius: 28px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+.modalHeader {
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #444746;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 500;
+  color: #e3e3e3;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #e3e3e3;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modalBody {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Legal Modal Specific */
+.legalModal {
+  max-width: 600px;
+}
+
+.legalBody {
+  line-height: 1.6;
+  color: #e3e3e3;
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.legalBody h4 {
+  margin: 20px 0 10px 0;
+  color: #fff;
+}
+
+.legalBody p {
+  margin-bottom: 12px;
+}
+
+.legalBody ul {
+  padding-left: 20px;
+  margin-bottom: 16px;
+}
+
+.legalBody li {
+  margin-bottom: 8px;
 }
