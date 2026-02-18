@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { updateProfile } from '../api'
 import { redirectToKakaoLogin } from '../lib/kakao'
 
+import logoImg from '../assets/logo.png'
+
 interface TopBarProps {
     onLogout: () => void
     profile: {
@@ -52,7 +54,7 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
     return (
         <header className="topBar">
             <div className="brand">
-                <img src="/src/assets/logo.png" alt="Grogi Logo" />
+                <img src={logoImg} alt="Grogi Logo" />
                 <span className="logoText">
                     <span className="logo-main">GROGI</span> <span className="logo-ai">AI</span>
                 </span>
