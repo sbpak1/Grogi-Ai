@@ -297,6 +297,27 @@ body {
   }
 }
 
+@keyframes thinkingPulse {
+  0% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+.thinkingIcon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  animation: thinkingPulse 1s ease-in-out infinite;
+}
+
 .emptyStateInput {
   width: 100%;
   max-width: 600px;

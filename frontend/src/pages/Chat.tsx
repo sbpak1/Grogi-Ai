@@ -4,9 +4,9 @@ import { redirectToKakaoLogin } from '../lib/kakao'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-import nomalImg from '../assets/nomal.png'
-import angryImg from '../assets/angry.png'
-import angelImg from '../assets/angel.png'
+const nomalImg = "/nomal.png"
+const angryImg = "/angry.png"
+const angelImg = "/angel.png"
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -36,6 +36,21 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       abortRef.current?.abort()
     }
   }, [])
+
+  const [thinkingImgIdx, setThinkingImgIdx] = useState(0)
+  const thinkingImgs = [nomalImg, angryImg, angelImg]
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>
+    if (streaming) {
+      interval = setInterval(() => {
+        setThinkingImgIdx((prev) => (prev + 1) % thinkingImgs.length)
+      }, 300)
+    } else {
+      setThinkingImgIdx(0)
+    }
+    return () => clearInterval(interval)
+  }, [streaming])
 
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
@@ -397,7 +412,13 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             <div className="msgContent" style={{ fontFamily: 'monospace', fontSize: '12px' }}>{analysisPreview}</div>
           </div>
         )}
-        {streaming && <div className="msg msg-system">응답 중...</div>}
+        {streaming && (
+          <div className="msg msg-assistant">
+            <div className="msgIcon">
+              <img src={thinkingImgs[thinkingImgIdx]} alt="thinking" className="thinkingIcon" />
+            </div>
+          </div>
+        )}
       </div>
 
       {(messages.length > 0 || streaming) && (
