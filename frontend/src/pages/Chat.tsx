@@ -23,6 +23,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
+  const [loadingHistory, setLoadingHistory] = useState(!!sessionId)
   const justStartedRef = useRef(false);
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -61,7 +62,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   // Idle state random expression animation
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>
-    if (messages.length === 0 && !streaming) {
+    if (messages.length === 0 && !streaming && !loadingHistory) {
       interval = setInterval(() => {
         const otherImgs = [nomalImg, angryImg, angelImg];
         const randomImg = otherImgs[Math.floor(Math.random() * otherImgs.length)];
@@ -95,6 +96,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   }, [sessionId])
 
   async function loadHistory(id: string) {
+    setLoadingHistory(true)
     try {
       const history = await getChatHistory(id)
       const messageList = Array.isArray(history) ? history : (history.messages || [])
@@ -105,6 +107,8 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       scrollToBottom()
     } catch (err) {
       console.error('Failed to load history', err)
+    } finally {
+      setLoadingHistory(false)
     }
   }
 
@@ -430,7 +434,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       )}
       <div className="chatWindowScroll" ref={chatWindowRef}>
 
-        {messages.length === 0 && !streaming && (
+        {messages.length === 0 && !streaming && !loadingHistory && (
           <div className="emptyState">
             <div className="speechBubble">
               <span>고민이 있으면 얘기해</span>
