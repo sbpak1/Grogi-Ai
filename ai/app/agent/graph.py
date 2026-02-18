@@ -14,7 +14,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from app.prompts.system_prompts import SYSTEM_PROMPT_BASE
-from app.tools.calculator import calculate_reality_score_logic
 from app.tools.search import get_search_tool
 
 
@@ -448,27 +447,6 @@ Detected Language: {state.get('detected_language', 'Korean')}
         "diagnosis": content,
     }
 
-def calculate_score(state: AgentState):
-    """
-    AG-12: 별도 노드로 분리하여 스트리밍 누수 방지
-    """
-    reality_score = calculate_reality_score_logic(
-        state["user_message"], 
-        state["diagnosis"], 
-        state.get("detected_language", "Korean")
-    )
-
-    share_card = {
-        "summary": reality_score.get("summary", "팩폭 요약: 현실 도피 그만하고 정신 차려!"),
-        "score": reality_score["total"],
-        "actions": ["1. 휴대폰 끄고 책상 앉기", "2. 우선순위 정하기", "3. 30분만 집중해보기"],
-    }
-
-    return {
-        "reality_score": reality_score,
-        "share_card": share_card,
-    }
-
 
 def build_graph():
     workflow = StateGraph(AgentState)
@@ -481,7 +459,6 @@ def build_graph():
     workflow.add_node("detect_language", detect_language)
     workflow.add_node("execute_tools", execute_tools)
     workflow.add_node("generate_response", generate_response)
-    workflow.add_node("calculate_score", calculate_score)
     workflow.set_entry_point("crisis_check")
 
     def route_crisis(x):
@@ -513,7 +490,6 @@ def build_graph():
     workflow.add_edge("extract_pdf_text", "generate_response")
     workflow.add_edge("analyze_input", "generate_response")
 
-    workflow.add_edge("generate_response", "calculate_score")
-    workflow.add_edge("calculate_score", END)
+    workflow.add_edge("generate_response", END)
 
     return workflow.compile()
