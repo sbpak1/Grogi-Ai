@@ -141,7 +141,6 @@ authRouter.get("/me", authMiddleware, async (req: Request, res: Response) => {
       profileImage: user.profileImage,
       createdAt: user.createdAt,
       fontSize: user.fontSize,
-      tGauge: user.tGauge,
       expertise: user.expertise,
       responseStyle: user.responseStyle,
       privateMode: user.privateMode,
@@ -187,7 +186,6 @@ authRouter.patch("/profile", authMiddleware, async (req: Request, res: Response)
 authRouter.patch("/settings", authMiddleware, async (req: Request, res: Response) => {
   const settingsSchema = z.object({
     fontSize: z.enum(["small", "medium", "large"]).optional(),
-    tGauge: z.enum(["mild", "spicy", "hell"]).optional(),
     expertise: z.enum(["career", "love", "finance", "self", "etc"]).optional(),
     responseStyle: z.enum(["short", "long"]).optional(),
     privateMode: z.boolean().optional(),
@@ -207,7 +205,6 @@ authRouter.patch("/settings", authMiddleware, async (req: Request, res: Response
 
     res.json({
       fontSize: user.fontSize,
-      tGauge: user.tGauge,
       expertise: user.expertise,
       responseStyle: user.responseStyle,
       privateMode: user.privateMode,

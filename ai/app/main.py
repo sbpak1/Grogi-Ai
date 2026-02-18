@@ -49,7 +49,6 @@ class PdfAttachment(BaseModel):
 class ChatRequest(BaseModel):
     session_id: str = Field(..., max_length=200)
     user_message: str = Field(..., max_length=10000)
-    level: str = Field(..., max_length=50)
     category: str = Field(..., max_length=50)
     history: List[ChatMessage] = Field(default=[], max_length=50)
     images: Optional[List[str]] = Field(default=None, max_length=5)
@@ -107,7 +106,6 @@ async def real_agent_generator(request: ChatRequest):
     initial_state = {
         "session_id": request.session_id,
         "user_message": request.user_message,
-        "level": "spicy",
         "category": request.category,
         "history": [msg.dict() for msg in request.history],
         "images": request.images or [],
