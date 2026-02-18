@@ -273,3 +273,8 @@ export async function sendSelfMessage(text: string) {
   const res = await api.post('/api/message/send', { text });
   return res.data;
 }
+
+export async function withdrawAccount() {
+  const res = await api.delete('/api/auth/withdrawal');
+  return res.data;
+}
