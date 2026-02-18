@@ -52,7 +52,10 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
     return (
         <header className="topBar">
             <div className="brand">
-                <span className="logoText">Grogi</span>
+                <img src="/src/assets/logo.png" alt="Grogi Logo" />
+                <span className="logoText">
+                    <span className="logo-main">GROGI</span> <span className="logo-ai">AI</span>
+                </span>
             </div>
 
             <div className="topBarActions">
