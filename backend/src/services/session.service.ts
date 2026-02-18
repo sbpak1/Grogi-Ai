@@ -16,7 +16,6 @@ export const sessionService = {
         const data = {
             userId,
             category: "etc",
-            level: "spicy",
             privateMode,
         };
         try {
@@ -55,7 +54,6 @@ export const sessionService = {
                 id: sessionId,
                 userId,
                 category: "etc",
-                level: "spicy",
                 messages: [],
                 createdAt: new Date(),
             };

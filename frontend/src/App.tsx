@@ -17,7 +17,6 @@ export default function App() {
     profileImage?: string;
     email?: string;
     fontSize: 'small' | 'medium' | 'large';
-    tGauge: 'mild' | 'spicy' | 'hell';
     expertise: string;
     responseStyle: 'short' | 'long';
     privateMode: boolean;

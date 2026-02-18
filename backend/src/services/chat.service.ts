@@ -6,7 +6,6 @@ import { isPrismaUnavailableError } from "../lib/prisma-errors";
 type ChatSessionContext = {
     id: string;
     category: string;
-    level: string;
     messages: Array<{ role: string; content: string }>;
     persist: boolean;
 };
@@ -24,7 +23,6 @@ type MockStoredMessage = {
 type MockStoredSession = {
     id: string;
     category: string;
-    level: string;
     messages: MockStoredMessage[];
 };
 
@@ -37,7 +35,6 @@ function getOrCreateMockSession(sessionId: string): MockStoredSession {
     const created: MockStoredSession = {
         id: sessionId,
         category: "etc",
-        level: "spicy",
         messages: [],
     };
     mockSessionStore.set(sessionId, created);
@@ -48,7 +45,6 @@ function toMockContext(session: MockStoredSession): ChatSessionContext {
     return {
         id: session.id,
         category: session.category,
-        level: session.level,
         messages: session.messages.map((m) => ({ role: m.role, content: m.content })),
         persist: false,
     };
@@ -133,7 +129,6 @@ export const chatService = {
                 return {
                     id: existing.id,
                     category: existing.category || "etc",
-                    level: existing.level || "spicy",
                     messages: existing.messages.map((m) => ({ role: m.role, content: m.content })),
                     persist: !existing.privateMode, // privateMode가 true면 persist를 false로 설정
                 } as ChatSessionContext;
@@ -150,7 +145,6 @@ export const chatService = {
                     id: sessionId,
                     userId: resolvedUserId,
                     category: "etc",
-                    level: "spicy",
                     privateMode: false, // 여기선 항상 false (프라이빗은 위에서 걸러짐)
                 },
                 include: {
@@ -164,7 +158,6 @@ export const chatService = {
             return {
                 id: created.id,
                 category: created.category || "etc",
-                level: created.level || "spicy",
                 messages: [],
                 persist: !created.privateMode, // privateMode가 true면 persist를 false로 설정
             } as ChatSessionContext;
@@ -274,7 +267,6 @@ export const chatService = {
             {
                 session_id: sessionId,
                 user_message: userMessage,
-                level: session.level,
                 category: session.category,
                 history,
                 images,

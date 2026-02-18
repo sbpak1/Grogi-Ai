@@ -13,7 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
-from app.prompts.system_prompts import LEVEL_PROMPTS, SYSTEM_PROMPT_BASE
+from app.prompts.system_prompts import SYSTEM_PROMPT_BASE
 from app.tools.calculator import calculate_reality_score_logic
 from app.tools.search import get_search_tool
 
@@ -21,7 +21,6 @@ from app.tools.search import get_search_tool
 class AgentState(TypedDict):
     session_id: str
     user_message: str
-    level: str
     category: str
     history: List[dict]
     status: str
@@ -308,7 +307,7 @@ async def generate_response(state: AgentState):
     from datetime import datetime
 
     # 게이지를 쓰지 않고, 항상 spicy 톤 고정
-    level_prompt = LEVEL_PROMPTS["spicy"]
+    level_prompt = "톤: 냉정하고 직설적으로. 듣기 싫은 말 거침없이. 해결책은 칼같이."
     today = datetime.now().strftime("%Y년 %m월 %d일")
 
     full_system_prompt = f"""{SYSTEM_PROMPT_BASE}
