@@ -190,6 +190,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
 }
 
 .brand img {
@@ -332,7 +333,7 @@ body {
   color: #9aa0a6;
   font-size: 0.75rem;
   text-align: center;
-  margin-top: 24px;
+  margin-top: 12px;
   font-family: 'Paperozi', sans-serif;
   line-height: 1.4;
   opacity: 0.6;

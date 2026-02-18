@@ -12,9 +12,10 @@ interface TopBarProps {
         email?: string
     } | null
     onProfileUpdate?: (updated: { nickname?: string; profileImage?: string; email?: string }) => void
+    onHome?: () => void
 }
 
-export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarProps) {
+export default function TopBar({ onLogout, profile, onProfileUpdate, onHome }: TopBarProps) {
     const [isPopoverOpen, setIsPopoverOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [editNickname, setEditNickname] = useState('')
@@ -53,7 +54,7 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
 
     return (
         <header className="topBar">
-            <div className="brand">
+            <div className="brand" onClick={onHome}>
                 <img src="/logo.png" alt="Grogi Logo" />
                 <span className="logoText">
                     <span className="logo-main">GROGI</span> <span className="logo-ai">AI</span>
