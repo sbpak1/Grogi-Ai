@@ -7,7 +7,6 @@ interface SettingsModalProps {
     onStartPrivateChat?: () => void
     settings: {
         fontSize: 'small' | 'medium' | 'large'
-        tGauge: 'mild' | 'spicy' | 'hell'
         expertise: string
         responseStyle: 'short' | 'long'
         privateMode: boolean
@@ -87,76 +86,54 @@ export default function SettingsModal({ isOpen, onClose, onStartPrivateChat, set
                     </div>
                 </div>
 
+                {/* AI 매운맛 섹션 제거됨 */}
                 <div className="settingItem" style={{ marginBottom: '24px' }}>
-                    <label style={{ display: 'block', marginBottom: '12px', color: '#888', fontSize: '0.875rem' }}>AI 매운맛 (T-Gauge)</label>
-                    <div className="toggleGroup" style={{ display: 'flex', gap: '8px' }}>
-                        {['mild', 'spicy', 'hell'].map((level) => (
-                            <button
-                                key={level}
-                                onClick={() => handleSettingChange('tGauge', level)}
-                                style={{
-                                    flex: 1,
-                                    padding: '8px',
-                                    borderRadius: '8px',
-                                    border: '1px solid #333',
-                                    backgroundColor: settings.tGauge === level ? '#333' : 'transparent',
-                                    color: settings.tGauge === level ? '#fff' : '#888',
-                                    cursor: 'pointer',
-                                    fontSize: '0.875rem'
-                                }}
-                            >
-                                {level === 'mild' ? '순한맛' : level === 'spicy' ? '매운맛' : '지옥맛'}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="settingItem" style={{ marginBottom: '24px' }}>
-                        <label style={{ display: 'block', marginBottom: '8px', color: '#888', fontSize: '0.875rem' }}>보안 (Security)</label>
-                        <button
-                            onClick={() => {
-                                onStartPrivateChat?.();
-                                onClose();
-                            }}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                borderRadius: '12px',
-                                backgroundColor: 'rgba(255, 77, 77, 0.15)',
-                                color: '#ff5c5c',
-                                border: '1px solid rgba(255, 77, 77, 0.2)',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                fontSize: '0.9rem',
-                                fontWeight: '600'
-                            }}
-                        >
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                            </svg>
-                            기록되지 않는 비밀 채팅 시작
-                        </button>
-                    </div>
-
+                    <label style={{ display: 'block', marginBottom: '8px', color: '#888', fontSize: '0.875rem' }}>보안 (Security)</label>
                     <button
-                        onClick={onClose}
+                        onClick={() => {
+                            onStartPrivateChat?.();
+                            onClose();
+                        }}
                         style={{
                             width: '100%',
                             padding: '12px',
-                            borderRadius: '8px',
-                            border: 'none',
-                            backgroundColor: '#007AFF',
-                            color: '#fff',
-                            fontWeight: 'bold',
-                            marginTop: '8px',
-                            cursor: 'pointer'
+                            borderRadius: '12px',
+                            backgroundColor: 'rgba(255, 77, 77, 0.15)',
+                            color: '#ff5c5c',
+                            border: '1px solid rgba(255, 77, 77, 0.2)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            fontSize: '0.9rem',
+                            fontWeight: '600'
                         }}
                     >
-                        확인
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                        </svg>
+                        기록되지 않는 비밀 채팅 시작
                     </button>
                 </div>
+
+                <button
+                    onClick={onClose}
+                    style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: '#007AFF',
+                        color: '#fff',
+                        fontWeight: 'bold',
+                        marginTop: '8px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    확인
+                </button>
             </div>
         </div>
     )
