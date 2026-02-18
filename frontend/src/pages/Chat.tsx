@@ -414,7 +414,8 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
         )}
         {streaming && (
           <div className="msg msg-assistant">
-            <div className="msgIcon">
+            <div className="msgIcon"></div>
+            <div className="msgContent">
               <img src={thinkingImgs[thinkingImgIdx]} alt="thinking" className="thinkingIcon" />
             </div>
           </div>
