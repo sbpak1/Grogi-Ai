@@ -14,7 +14,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from app.prompts.system_prompts import SYSTEM_PROMPT_BASE
-from app.tools.calculator import calculate_reality_score_logic
 from app.tools.search import get_search_tool
 
 
@@ -23,7 +22,6 @@ class AgentState(TypedDict):
     user_message: str
     category: str
     history: List[dict]
-    status: str
     current_section: str
     diagnosis: str
     factcheck: str
@@ -373,26 +371,10 @@ async def execute_tools(state: AgentState):
             hist.append(search_query)
             state["search_history"] = hist
 
-    return {"factcheck": search_results, "status": "executing_tools"}
+    return {"factcheck": search_results}
 
 
-async def check_search_quality(state: AgentState):
-    """검색 결과가 충분한지 판단하고 재검색 여부를 결정"""
-    search_results = state.get("factcheck", "")
-    search_count = state.get("search_count", 0)
-    
-    # 결과가 없거나 오류인 경우
-    if not search_results or "검색 결과가 없습니다" in search_results or "오류 발생" in search_results:
-        if search_count < 2:  # 최대 2회 재시도 (총 3회 검색)
-             return "rewrite"
-        return "pass"
 
-    # 결과는 있지만 내용이 부실한지 LLM이 판단 (선택적)
-    # 여기서는 간단히 결과 길이로 1차 판단하거나, LLM 호출을 추가할 수 있음
-    if len(search_results) < 50 and search_count < 2:
-        return "rewrite"
-        
-    return "pass"
 
 
 async def rewrite_query(state: AgentState):
@@ -442,9 +424,9 @@ async def generate_response(state: AgentState):
 
 [Current Context]
 Current Date: {today}
-Category: {state['category']}
+Category: {state.get('category', 'etc')}
 Detected Language: {state.get('detected_language', 'Korean')} (You MUST respond in this language)
-Real-time Info: {state['factcheck']}
+Real-time Info: {state.get('factcheck', 'No search results')}
 Image Analysis: {state.get('image_analysis', 'None')}
 Document Content: {state.get('pdf_text', 'None')}
 
@@ -578,16 +560,23 @@ def calculate_score(state: AgentState):
     }
 
 
+
+
+async def fan_out(state: AgentState):
+    """병렬 실행을 위한 시작점 (Pass-through)"""
+    return state
+
+
 def build_graph():
     workflow = StateGraph(AgentState)
 
     workflow.add_node("crisis_check", crisis_check)
+    workflow.add_node("fan_out", fan_out)  # [NEW] 병렬 시작점
     workflow.add_node("extract_pdf_text", extract_pdf_text)
     workflow.add_node("analyze_images", analyze_images)
     workflow.add_node("analyze_input", analyze_input)
     workflow.add_node("detect_language", detect_language)
     workflow.add_node("execute_tools", execute_tools)
-    workflow.add_node("check_search_quality", check_search_quality)
     workflow.add_node("rewrite_query", rewrite_query)
     workflow.add_node("generate_response", generate_response)
     workflow.add_node("check_response", check_response)
@@ -595,35 +584,16 @@ def build_graph():
     workflow.add_node("calculate_score", calculate_score)
     workflow.set_entry_point("crisis_check")
 
-    def route_crisis(x):
-        level = x.get("crisis_level", "safe")
-        if level == "crisis":
-            return "crisis"
-        elif level == "unclear":
-            return "unclear"
-        return "safe"
+
 
     workflow.add_conditional_edges(
         "crisis_check",
         route_crisis,
-        {"crisis": END, "unclear": END, "safe": "detect_language"},
+        {"crisis": END, "unclear": END, "safe": "fan_out"},
     )
     
     def route_search_loop(x):
         """검색 품질 체크 후 라우팅"""
-        # check_search_quality 함수가 직접 반환하는 값은 여기서 쓰지 않음 (StateGraph 구조상)
-        # 대신 state 안의 값이나 로직을 다시 태워야 하는데, 
-        # 위에서 check_search_quality를 노드로 만들었으니 그 결과를 이용해야 함.
-        # 하지만 langgraph에서 노드 반환값으로 분기하려면 conditional_edges를 그 노드 뒤에 붙여야 함.
-        
-        # 여기서는 단순히 check_search_quality 노드가 state를 업데이트하지 않고 
-        # 바로 분기 로직을 태우기 위해 별도 함수 대신 노드 로직을 수정하거나
-        # conditional edge에서 직접 판단하게 해야 함. 
-        
-        # 수정: check_search_quality 노드를 제거하고 conditional_edge 함수에서 직접 판단.
-        # 또는 check_search_quality가 'search_quality' 같은 state를 남기게 해야 함.
-        
-        # 간단하게 구현하기 위해: execute_tools 뒤에 바로 분기 함수 붙임
         factcheck = x.get("factcheck", "")
         search_count = x.get("search_count", 0)
         
@@ -631,10 +601,14 @@ def build_graph():
             return "retry"
         return "pass"
 
-    workflow.add_edge("detect_language", "extract_pdf_text")
-    workflow.add_edge("extract_pdf_text", "analyze_images")
-    workflow.add_edge("analyze_images", "analyze_input")
-    workflow.add_edge("analyze_input", "execute_tools")
+    # Phase 1: 병렬 실행 (서로 의존성 없음)
+    workflow.add_edge("fan_out", "detect_language")
+    workflow.add_edge("fan_out", "extract_pdf_text")
+    workflow.add_edge("fan_out", "analyze_input")
+
+    # Phase 2: detect_language 결과 필요한 노드들 (병렬)
+    workflow.add_edge("detect_language", "analyze_images")
+    workflow.add_edge("detect_language", "execute_tools")
     
     # Search Loop
     workflow.add_conditional_edges(
@@ -646,9 +620,19 @@ def build_graph():
         }
     )
     workflow.add_edge("rewrite_query", "execute_tools")
+
+    # Fan-in: 모든 분석 완료 후 응답 생성
+    workflow.add_edge("analyze_images", "generate_response")
+    # execute_tools -> generate_response (via route_search_loop)
+    workflow.add_edge("extract_pdf_text", "generate_response")
+    workflow.add_edge("analyze_input", "generate_response")
     
     # Response Self-Correction Loop
     workflow.add_edge("generate_response", "check_response")
+
+
+    
+
     
     def route_response_check(x):
         critique = x.get("response_critique", "PASS")

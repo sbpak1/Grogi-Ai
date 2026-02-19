@@ -255,7 +255,24 @@ body {
 }
 
 .characterImg:hover {
+  animation: doubleBounce 0.6s ease-in-out 2;
   transform: scale(1.05);
+}
+
+@keyframes doubleBounce {
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1.05);
+  }
+
+  45% {
+    transform: translateY(-15px) scale(1.05);
+  }
+
+  90% {
+    transform: translateY(0) scale(1.05);
+  }
 }
 
 .speechBubble {
@@ -1213,4 +1230,160 @@ body {
 
 .cancel-btn:hover {
   background-color: #444;
+}
+
+/* ─── Responsive Queries ───────────────────────── */
+@media (max-width: 768px) {
+  /* Hide sidebar on extremely small screens or handle auto-collapse in JS */
+
+  /* TopBar */
+  .topBar {
+    padding: 8px 12px;
+  }
+
+  .slogan {
+    display: none;
+    /* Hide slogan on mobile to save vertical space */
+  }
+
+  .logoText {
+    font-size: 1.3rem;
+  }
+
+  /* Empty State */
+  .characterImg {
+    width: 260px;
+    height: 260px;
+  }
+
+  .speechBubble {
+    font-size: 0.95rem;
+    padding: 12px 20px;
+    margin-top: 10px;
+  }
+
+  /* Chat Area */
+  .chatWindowScroll {
+    padding: 20px 16px 280px 16px;
+    gap: 20px;
+  }
+
+  .msgContent {
+    max-width: 90%;
+    font-size: 0.95em;
+  }
+
+  /* Input Area */
+  .inputArea {
+    padding: 0 12px;
+    bottom: 20px;
+  }
+
+  .chatInputBox {
+    padding: 8px 16px;
+    border-radius: 24px;
+  }
+
+  /* Popovers */
+  .profilePopover {
+    width: calc(100vw - 32px);
+    right: 16px;
+    top: 56px;
+    padding: 16px;
+  }
+
+  .greetingText {
+    font-size: 1.1em;
+    margin-bottom: 16px;
+  }
+
+  .popoverFooterActions .footerBtn.single {
+    padding: 16px;
+  }
+
+  /* Modals */
+  .modalContent {
+    width: 95vw;
+    max-height: 85vh;
+  }
+
+  .modalHeader {
+    padding: 16px;
+  }
+
+  .modalBody {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logoText {
+    font-size: 1.1rem;
+  }
+
+  .characterImg {
+    width: 220px;
+    height: 220px;
+  }
+
+  .speechBubble {
+    font-size: 0.85rem;
+    padding: 10px 16px;
+  }
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  background: rgba(30, 31, 32, 0.95);
+  border: 1px solid rgba(255, 51, 51, 0.4);
+  color: var(--text-main);
+  padding: 14px 22px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-family: 'Paperozi', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 12px rgba(255, 51, 51, 0.15);
+  backdrop-filter: blur(12px);
+  animation: toastSlideIn 0.4s ease-out, toastFadeOut 0.4s ease-in 3.6s forwards;
+}
+
+.toast-notification:hover {
+  border-color: rgba(255, 51, 51, 0.7);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 51, 51, 0.25);
+}
+
+.toast-icon {
+  font-size: 1.2rem;
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toastFadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
 }
