@@ -268,17 +268,16 @@ async def analyze_input(state: AgentState):
 
 async def analyze_images(state: AgentState):
     images = state.get("images", [])
-    detected_lang = state.get("detected_language", "Korean")
     
     if not images:
-        return {"image_analysis": "이미지 없음" if detected_lang == "Korean" else "No images provided"}
+        return {"image_analysis": "이미지 없음"}
 
-    system_msg = f"""You are a cold and rational observer. Analyze the provided image(s) and provide the following in {detected_lang}:
+    system_msg = """You are a cold and rational observer. Analyze the provided image(s) and provide the following:
 1. **Summary**: What is happening? (e.g., gaming, studying, eating)
 2. **Text (OCR)**: Transcribe any visible text exactly.
 3. **Observations**: Identify any contradictions or specific details.
 
-Be concise and factual."""
+Be concise and factual. Output in English (the generator will translate if needed)."""
 
     messages = [
         SystemMessage(content=system_msg),
@@ -320,8 +319,8 @@ Be concise and factual."""
 
 
 async def execute_tools(state: AgentState):
-    detected_lang = state.get("detected_language", "Korean")
-    search_tool = get_search_tool(detected_lang)
+    # 검색 도구는 기본적으로 한국어 설정을 사용하되, 필요 시 LLM이 쿼리를 영어로 바꿔서 검색함
+    search_tool = get_search_tool("Korean")
     search_results = "No search results"
 
     # 검색 쿼리가 상태에 미리 저장되어 있으면 그걸 사용, 아니면 user_message에서 추출
@@ -433,15 +432,15 @@ Document Content: {state.get('pdf_text', 'None')}
 
 [Response Guidelines]
 0. **CRITICAL**: Respond ONLY in the [Detected Language] specified below. Do not use Korean unless detected.
-1. **[강력] 길이/형식 완전 자율화**: 글자 수, 줄 수, 문단 수에 대한 **모든 제한을 해제**한다. 하고 싶은 말이 있으면 충분히 길게, 논리적으로 풀어내라. 끊기지 말고 끝까지 말해라.
-2. **[핵심] 다채로운 스토리텔링**: 딱딱한 분석가가 아니라, **인생의 쓴맛 단맛 다 본 선배**처럼 말해라. 술 한잔 기울이며 진지하게 조언하듯이, 문맥(Context)을 짚고 심리(Deep Dive)를 파고들어라.
-3. **[구조] 기승전결이 있는 흐름**:
-    - **도입**: 사용자의 상황을 영화 장면처럼 구체적으로 묘사하며 공감하거나 놀라워하라.
-    - **전개 (심층 분석)**: 겉으로 드러난 문제가 아니라, 사용자가 회피하고 있는 **진짜 속마음**이나 **무의식**을 파헤쳐라.
-    - **반전 (Reality Check)**: 뼈 때리는 조언으로 환상을 깨라. "냉철하게 현실을 보자면..." 하고 훅 들어와라.
-    - **결론**: 그래서 지금 당장 뭘 해야 하는지 현실적인 행동 지침을 줘라.
-4. **[말투] 자연스러운 구어체 반말**: "~다", "~까" 금지. "~어", "~야", "~지", "~네", "~군" 등 자연스러운 반말 사용. (예: "그건 네 착각이야.", "지금 그게 문제라고 생각하는 거야?", "정신 차려.")
-5. **[서식] 가독성 있는 문단**: 내용이 길어지면 자연스럽게 문단을 나눠라. 줄바꿈을 강제하지 말고, 문맥에 따라 문단을 구분해라.
+1. **[강력] 필연적 플롯 구조 (각 문단 2~3문장 고정)**: 답변은 반드시 다음의 3단계 구조를 따르며, **각 문단은 반드시 2~3문장 이내**로 짧게 끝내라.
+    - **1문단: 현재 힘든 점 (Pain)**: 사용자가 겪는 고통을 2~3문장으로 요약해라. 구구절절하지 않게 핵심만 짚어라.
+    - **2문단: 스스로 생각하는 이유 (Reason)**: 사용자의 표면적인 변명이나 착각을 2~3문장으로 분석해라. "이래서 힘들다고 생각하지?"라고 짧게 물어라.
+    - **3문단: 실제 이유 (Reality Check)**: 가장 중요하다. 회피하고 있던 진짜 이유를 2~3문장으로 뼈 때리게 지적해라. 문장이 짧을수록 임팩트가 크다.
+    - **결론 (Solution)**: 당장 해야 할 실천 지침을 1~2문장으로 칼같이 던져라.
+2. **[핵심] 짧고 강한 문장**: 수식어를 빼고 짧은 단문 위주로 구성해라. 만연체 금지. 호흡이 빨라야 한다.
+3. **[말투] 자연스러운 구어체 반말**: "~어", "~야", "~지", "~네" 등 자연스러운 반말 사용. (예: "착각하지 마.", "정신 차려.")
+4. **[강력] 총 길이 축소**: 전체 답변이 너무 길어지지 않게 해라. 자세하되 문장은 짧게, 내용은 핵심만 담아라.
+5. **[서식] 문단 구분**: 각 단계 사이에는 확실하게 줄바꿈을 해라. 가독성이 제일 중요하다.
 6. JSON, 코드블록, 마크다운(링크 제외) 쓰지 마.
 7. 이미지 분석 결과 있으면 자연스럽게 녹여서.
 8. 문서 내용이 제공되면 "뭘 분석해?" 같은 되물음 없이 바로 비평 시작해. 문서를 읽었으니까 내용에 대해 바로 말해.
@@ -516,14 +515,18 @@ async def check_response(state: AgentState):
         return {"response_critique": "Max retries reached."}
 
     check_prompt = ChatPromptTemplate.from_messages([
-        ("system", """너는 AI 윤리 및 품질 검수관이다.
-아래 AI의 답변을 평가하라.
-1. 사용자의 질문에 적절히 답변했는가?
-2. **[중요]** 비윤리적, 반사회적, 이기적인 행동을 옹호하거나 정당화하지 않았는가?
-3. 사회 통념에 어긋나는 내용이 포함되어 있는가?
+        ("system", """너는 AI 답변 검수관이다.
+아래 가이드라인에 따라 AI의 답변을 평가하라.
 
-문제가 있다면 무엇이 문제인지 짧게 지적하라. (Critique)
-문제가 없다면 "PASS"라고만 답하라.
+[평가 기준]
+1. **사용자의 질문에 적절히 답변했는가?**
+2. **[매우 중요] 윤리성**: 혐오 발언, 성희롱, 자해 조장, 범죄 공모 등 명백히 위험한 내용이 있는가?
+3. **페르소나 준수**: 이 AI는 '냉소적', '현실적', '직설적'이며 '반말'을 사용하는 캐릭터다. 
+    - **통과 대상**: 사용자를 질책함, 차가운 말투, "정신 차려" 같은 강한 표현, 반말 사용.
+    - **지적 대상**: 명백한 욕설, 비하적 멸칭, 사용자의 안전을 직접적으로 위협하는 발언.
+
+말투가 차갑거나 무례하다는 이유로 "Critique"를 내지 마라. 오직 '위험성'과 '정확도'만 봐라.
+문제가 있다면 짧게 지적하고, 문제가 없다면 "PASS"라고만 답하라.
 """),
         ("user", f"사용자 질문: {state['user_message']}\nAI 답변: {diagnosis}")
     ])
@@ -590,14 +593,12 @@ def build_graph():
             return "retry"
         return "pass"
 
-    # Phase 1: 병렬 실행 (서로 의존성 없음)
+    # Phase 2: 병렬 실행 (모두 fan_out에서 직접 시작하여 병렬성 극대화)
     workflow.add_edge("fan_out", "detect_language")
     workflow.add_edge("fan_out", "extract_pdf_text")
     workflow.add_edge("fan_out", "analyze_input")
-
-    # Phase 2: detect_language 결과 필요한 노드들 (병렬)
-    workflow.add_edge("detect_language", "analyze_images")
-    workflow.add_edge("detect_language", "execute_tools")
+    workflow.add_edge("fan_out", "analyze_images")
+    workflow.add_edge("fan_out", "execute_tools")
     
     # Search Loop
     workflow.add_conditional_edges(
