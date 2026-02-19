@@ -69,9 +69,6 @@ export default function TopBar({ onLogout, profile, onProfileUpdate, onHome, onO
         <header className="topBar">
             <div className="brand" onClick={onHome}>
                 <img src="/logo.png" alt="Grogi Logo" />
-                <span className="logoText">
-                    <span className="logo-main">GROGI</span> <span className="logo-ai">AI</span>
-                </span>
             </div>
 
             <div className="topBarActions">
