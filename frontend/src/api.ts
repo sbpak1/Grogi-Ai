@@ -261,14 +261,20 @@ export function chatStream(
       }
     },
     onerror(err) {
-      // 치명적 에러로 간주하여 재시도 하지 않음
-      if (abortController.signal.aborted) return
-      handlers.onError?.(err)
+      if (!abortController.signal.aborted && !finished) {
+        handlers.onError?.(err)
+      }
       throw err // 이 라이브러리는 throw하면 재시도를 중단함
     },
     openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
     onclose() {
+      if (!finished) {
+        // [DONE] 전에 연결이 끊김 → 에러 처리 (탭 전환 중 브라우저가 끊은 경우 등)
+        handlers.onError?.(new Error('연결이 끊어졌습니다. 다시 시도해주세요.'))
+        finished = true
+      }
       finish()
+      abortController.abort() // throw 대신 abort로 재연결 방지 (콘솔 에러 없음)
     },
   })
 

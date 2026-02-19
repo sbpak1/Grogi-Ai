@@ -4,9 +4,9 @@ import { redirectToKakaoLogin } from '../lib/kakao'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-const nomalImg = "/nomal.png"
-const angryImg = "/angry.png"
-const angelImg = "/angel.png"
+import nomalImg from "../assets/nomal.png"
+import angryImg from "../assets/angry.png"
+import angelImg from "../assets/angel.png"
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
 
@@ -23,13 +23,24 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const [analysisPreview, setAnalysisPreview] = useState<string | null>(null)
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
+  const [loadingHistory, setLoadingHistory] = useState(!!sessionId)
   const justStartedRef = useRef(false);
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatWindowRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const isSendingRef = useRef(false) // 중복 전송 방지용 Ref
+
+  // 이미지 프리로드 (메모리 캐싱)
+  useEffect(() => {
+    [nomalImg, angryImg, angelImg].forEach(src => {
+      const img = new Image()
+      img.src = src
+    })
+  }, [])
 
   // 컴포넌트 언마운트 시 SSE 연결 정리
   useEffect(() => {
@@ -40,6 +51,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   }, [])
 
   const [thinkingImgIdx, setThinkingImgIdx] = useState(0)
+  const [currentIdleImg, setCurrentIdleImg] = useState(nomalImg)
   const thinkingImgs = [nomalImg, angryImg, angelImg]
 
   useEffect(() => {
@@ -55,21 +67,46 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     return () => clearInterval(interval)
   }, [streaming])
 
+  // Idle state random expression animation
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>
+    if (messages.length === 0 && !streaming && !loadingHistory) {
+      interval = setInterval(() => {
+        const allImgs = [nomalImg, angryImg, angelImg];
+        setCurrentIdleImg(prev => {
+          const others = allImgs.filter(img => img !== prev)
+          return others[Math.floor(Math.random() * others.length)]
+        })
+      }, 3000)
+    } else {
+      setCurrentIdleImg(nomalImg)
+    }
+    return () => clearInterval(interval)
+  }, [messages.length, streaming])
+
   // 세션 ID 변경 시 히스토리 로드
   useEffect(() => {
     if (sessionId) {
-      // 새로 시작된 세션인 경우 히스토리 로드를 건너뜀 (이미 optimistic하게 메시지가 채워짐)
+      // 방금 내가 만든 세션이면 스트림 유지 (abort 하면 안 됨!)
       if (justStartedRef.current) {
         justStartedRef.current = false
         return
       }
+      // 다른 세션으로 전환 시에만 진행 중인 스트림 정리
+      abortRef.current?.abort()
+      isSendingRef.current = false
+      setStreaming(false)
       loadHistory(sessionId)
     } else {
+      abortRef.current?.abort()
+      isSendingRef.current = false
+      setStreaming(false)
       setMessages([])
     }
   }, [sessionId])
 
   async function loadHistory(id: string) {
+    setLoadingHistory(true)
     try {
       const history = await getChatHistory(id)
       const messageList = Array.isArray(history) ? history : (history.messages || [])
@@ -80,6 +117,8 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
       scrollToBottom()
     } catch (err) {
       console.error('Failed to load history', err)
+    } finally {
+      setLoadingHistory(false)
     }
   }
 
@@ -115,6 +154,11 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     isSendingRef.current = true // 즉시 잠금
     setStreaming(true)
     setAnalysisPreview(null)
+
+    // 알림 권한 요청 (최초 1회, 사용자가 허용/거부하면 다시 묻지 않음)
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
 
     // 유저 메시지 추가
     const parts: string[] = []
@@ -227,6 +271,23 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             if (currentSessionId) {
               onSessionStarted(currentSessionId)
             }
+            // 다른 탭에 있을 때 브라우저 알림 + 인앱 토스트
+            if (document.visibilityState === 'hidden') {
+              if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('🔥 그로기 답변 완료', {
+                  body: '답변이 준비됐어. 확인해봐.',
+                  icon: nomalImg,
+                })
+              }
+              // 돌아왔을 때 토스트 표시
+              const showToast = () => {
+                setToast('그로기가 답변을 완료했어요!')
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+                toastTimerRef.current = setTimeout(() => setToast(null), 4000)
+                document.removeEventListener('visibilitychange', showToast)
+              }
+              document.addEventListener('visibilitychange', showToast)
+            }
           },
           onError(err) {
             setAnalysisPreview(null)
@@ -336,7 +397,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
               handleSend()
             }
           }}
-          placeholder="여기에 도움말 입력"
+          placeholder="Grogi와 대화하기"
           rows={1}
         />
       </div>
@@ -374,9 +435,16 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
 
   return (
     <>
+      {/* 인앱 토스트 알림 */}
+      {toast && (
+        <div className="toast-notification" onClick={() => setToast(null)}>
+          <span className="toast-icon">🔥</span>
+          <span>{toast}</span>
+        </div>
+      )}
       <div className="chatWindowScroll" ref={chatWindowRef}>
 
-        {messages.length === 0 && !streaming && (
+        {messages.length === 0 && !streaming && !loadingHistory && (
           <div className="emptyState">
             <div className="speechBubble">
               <span>고민이 있으면 얘기해</span>
@@ -384,14 +452,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
             </div>
             <img
               className="characterImg"
-              src={nomalImg}
+              src={currentIdleImg}
               alt="Grogi"
-              onMouseEnter={(e) => {
+              onMouseEnter={() => {
                 const rand = Math.random() < 0.5 ? angryImg : angelImg;
-                (e.target as HTMLImageElement).src = rand;
+                setCurrentIdleImg(rand);
               }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLImageElement).src = nomalImg;
+              onMouseLeave={() => {
+                setCurrentIdleImg(nomalImg);
               }}
             />
             <div className="inputArea emptyStateInput">
