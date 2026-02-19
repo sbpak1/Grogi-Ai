@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { updateProfile } from '../api'
+import { updateProfile, withdrawAccount } from '../api'
+import { redirectToKakaoLogin } from '../lib/kakao'
+
+
 
 interface TopBarProps {
     onLogout: () => void
@@ -8,10 +11,13 @@ interface TopBarProps {
         profileImage?: string
         email?: string
     } | null
-    onProfileUpdate?: (updated: any) => void
+    onProfileUpdate?: (updated: { nickname?: string; profileImage?: string; email?: string }) => void
+    onHome?: () => void
+    onOpenPrivacy?: () => void
+    onOpenTerms?: () => void
 }
 
-export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarProps) {
+export default function TopBar({ onLogout, profile, onProfileUpdate, onHome, onOpenPrivacy, onOpenTerms }: TopBarProps) {
     const [isPopoverOpen, setIsPopoverOpen] = useState(false)
     const [isEditing, setIsEditing] = useState(false)
     const [editNickname, setEditNickname] = useState('')
@@ -42,25 +48,27 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
         }
     }
 
-    // Prepare Kakao Auth URL in advance for zero-latency redirect
-    const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY
-    const REDIRECT_URI = `${window.location.origin}/auth/kakao`
-    const KAKAO_AUTH_URL = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_KEY}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=profile_nickname,profile_image,talk_message`
-
     function triggerLogin() {
-        if (!KAKAO_KEY) {
-            alert('로그인 설정(API Key)이 누락되었습니다.')
-            return
+        redirectToKakaoLogin()
+    }
+
+    async function handleWithdraw() {
+        if (!window.confirm('정말로 탈퇴하시겠습니까? 관련 데이터가 모두 삭제되며 복구할 수 없습니다.')) return
+        try {
+            await withdrawAccount()
+            alert('탈퇴 처리가 완료되었습니다.')
+            onLogout()
+        } catch (err) {
+            alert('탈퇴 처리 중 오류가 발생했습니다.')
         }
-        window.location.href = KAKAO_AUTH_URL
     }
 
     const defaultAvatar = "https://lh3.googleusercontent.com/a/default-user=s64"
 
     return (
         <header className="topBar">
-            <div className="brand">
-                <span className="logoText">Grogi</span>
+            <div className="brand" onClick={onHome}>
+                <img src="/logo.png" alt="Grogi Logo" />
             </div>
 
             <div className="topBarActions">
@@ -117,17 +125,6 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
                                 alt="large avatar"
                                 className="largeAvatar"
                             />
-                            <button className="cameraIconBtn" onClick={() => {
-                                if (!isEditing) setIsEditing(true);
-                                else {
-                                    const url = prompt('이미지 URL을 입력하세요', editProfileImage);
-                                    if (url !== null) setEditProfileImage(url);
-                                }
-                            }}>
-                                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 12m-3.2 0a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0 -6.4 0M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5s5 2.24 5 5s-2.24 5-5 5z" />
-                                </svg>
-                            </button>
                         </div>
 
                         {isEditing ? (
@@ -155,23 +152,28 @@ export default function TopBar({ onLogout, profile, onProfileUpdate }: TopBarPro
                                 </button>
                             </div>
                         ) : (
-                            <button className="footerBtn single" onClick={() => {
-                                setIsPopoverOpen(false)
-                                onLogout()
-                            }}>
-                                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
-                                </svg>
-                                <span>로그아웃</span>
-                            </button>
+                            <div className="popoverFooterActions">
+                                <button className="footerBtn single" onClick={() => {
+                                    setIsPopoverOpen(false)
+                                    onLogout()
+                                }}>
+                                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+                                    </svg>
+                                    <span>로그아웃</span>
+                                </button>
+                                <button className="withdrawalBtn" onClick={handleWithdraw}>
+                                    회원 탈퇴
+                                </button>
+                            </div>
                         )}
                     </div>
 
                     {!isEditing && (
                         <div className="popoverBottomLinks">
-                            <span>개인정보처리방침</span>
+                            <span onClick={onOpenPrivacy}>개인정보처리방침</span>
                             <span>•</span>
-                            <span>서비스 약관</span>
+                            <span onClick={onOpenTerms}>서비스 약관</span>
                         </div>
                     )}
                 </div>

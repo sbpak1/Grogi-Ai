@@ -1,11 +1,11 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { env } from "../lib/env";
+import { isPrismaUnavailableError } from "../lib/prisma-errors";
 
 type ChatSessionContext = {
     id: string;
     category: string;
-    level: string;
     messages: Array<{ role: string; content: string }>;
     persist: boolean;
 };
@@ -23,7 +23,6 @@ type MockStoredMessage = {
 type MockStoredSession = {
     id: string;
     category: string;
-    level: string;
     messages: MockStoredMessage[];
 };
 
@@ -36,7 +35,6 @@ function getOrCreateMockSession(sessionId: string): MockStoredSession {
     const created: MockStoredSession = {
         id: sessionId,
         category: "etc",
-        level: "spicy",
         messages: [],
     };
     mockSessionStore.set(sessionId, created);
@@ -47,7 +45,6 @@ function toMockContext(session: MockStoredSession): ChatSessionContext {
     return {
         id: session.id,
         category: session.category,
-        level: session.level,
         messages: session.messages.map((m) => ({ role: m.role, content: m.content })),
         persist: false,
     };
@@ -80,19 +77,6 @@ function appendMockMessage(
     return msg;
 }
 
-function isPrismaUnavailableError(error: any) {
-    if (!error) return false;
-    const code = String(error.code || "");
-    const message = String(error.message || "");
-    return (
-        code === "P2021" ||
-        code === "P1001" ||
-        code === "ECONNREFUSED" ||
-        message.includes("does not exist") ||
-        message.includes("ECONNREFUSED")
-    );
-}
-
 function isMessageSessionForeignKeyError(error: any) {
     if (!error) return false;
     const code = String(error.code || "");
@@ -110,21 +94,26 @@ function isMessageSessionForeignKeyError(error: any) {
 }
 
 export const chatService = {
-    async ensureSessionForChat(sessionId: string, userId?: string) {
+    async verifySessionOwner(sessionId: string, userId: string): Promise<boolean> {
         try {
-            let resolvedUserId = userId;
+            const session = await prisma.session.findUnique({
+                where: { id: sessionId },
+                select: { userId: true },
+            });
+            if (!session) return true; // 세션이 아직 없으면 생성 예정이므로 통과
+            return session.userId === userId;
+        } catch {
+            return true; // DB 에러 시 fallback (mock 세션 모드)
+        }
+    },
 
-            if (!resolvedUserId) {
-                const devUser = await prisma.user.upsert({
-                    where: { kakaoId: "dev-local-user" },
-                    update: {},
-                    create: {
-                        kakaoId: "dev-local-user",
-                        nickname: "Dev User",
-                    },
-                });
-                resolvedUserId = devUser.id;
+    async ensureSessionForChat(sessionId: string, userId?: string, privateMode: boolean = false) {
+        try {
+            if (!userId) {
+                throw new Error("인증된 사용자만 채팅할 수 있습니다");
             }
+
+            const resolvedUserId = userId;
 
             const existing = await prisma.session.findUnique({
                 where: { id: sessionId },
@@ -140,10 +129,15 @@ export const chatService = {
                 return {
                     id: existing.id,
                     category: existing.category || "etc",
-                    level: existing.level || "spicy",
                     messages: existing.messages.map((m) => ({ role: m.role, content: m.content })),
-                    persist: true,
+                    persist: !existing.privateMode, // privateMode가 true면 persist를 false로 설정
                 } as ChatSessionContext;
+            }
+
+            // 부모 세션이 DB에 없는데 프라이빗 요청이면 DB 생성 없이 모크 세션 사용
+            if (privateMode) {
+                console.log(`[chatService] Bypassing DB for private session: ${sessionId}`);
+                return toMockContext(getOrCreateMockSession(sessionId));
             }
 
             const created = await prisma.session.create({
@@ -151,7 +145,7 @@ export const chatService = {
                     id: sessionId,
                     userId: resolvedUserId,
                     category: "etc",
-                    level: "spicy",
+                    privateMode: false, // 여기선 항상 false (프라이빗은 위에서 걸러짐)
                 },
                 include: {
                     messages: {
@@ -164,9 +158,8 @@ export const chatService = {
             return {
                 id: created.id,
                 category: created.category || "etc",
-                level: created.level || "spicy",
                 messages: [],
-                persist: true,
+                persist: !created.privateMode, // privateMode가 true면 persist를 false로 설정
             } as ChatSessionContext;
         } catch (error: any) {
             const unavailable = isPrismaUnavailableError(error);
@@ -185,28 +178,41 @@ export const chatService = {
 
     async getChatHistory(sessionId: string) {
         try {
-            return await prisma.message.findMany({
+            const dbMessages = await prisma.message.findMany({
                 where: { sessionId },
                 orderBy: { createdAt: "asc" },
             });
+            if (dbMessages.length > 0) return dbMessages;
         } catch (error: any) {
             if (!isPrismaUnavailableError(error)) throw error;
-            return getOrCreateMockSession(sessionId).messages.map((m) => ({
-                id: m.id,
-                sessionId: m.sessionId,
-                role: m.role,
-                content: m.content,
-                realityScore: m.realityScore,
-                scoreBreakdown: m.scoreBreakdown,
-                createdAt: m.createdAt,
-            }));
         }
+
+        // DB에 없거나 에러난 경우 모크 저장소 확인
+        return getOrCreateMockSession(sessionId).messages.map((m) => ({
+            id: m.id,
+            sessionId: m.sessionId,
+            role: m.role,
+            content: m.content,
+            realityScore: m.realityScore,
+            scoreBreakdown: m.scoreBreakdown,
+            createdAt: m.createdAt,
+        }));
     },
 
-    async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any) {
+    async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any, messageId?: string) {
         try {
+            // Idempotency check: if messageId is provided, check if it exists
+            if (messageId) {
+                const existing = await prisma.message.findUnique({ where: { id: messageId } });
+                if (existing) {
+                    console.log(`[chatService] Duplicate message detected (id: ${messageId}). Skipping save.`);
+                    return existing;
+                }
+            }
+
             const message = await prisma.message.create({
                 data: {
+                    id: messageId, // Optional: if provided, use it. If not, Prisma generates cuid
                     sessionId,
                     role,
                     content,
@@ -258,9 +264,10 @@ export const chatService = {
         images?: string[],
         ocr_text?: string,
         userId?: string,
-        pdfs?: Array<{ filename: string; content: string }>
+        pdfs?: Array<{ filename: string; content: string }>,
+        privateMode: boolean = false
     ) {
-        const session = (await this.ensureSessionForChat(sessionId, userId)) as ChatSessionContext;
+        const session = (await this.ensureSessionForChat(sessionId, userId, privateMode)) as ChatSessionContext;
         const aiBaseUrl = env.AI_SERVER_URL.replace(/\/+$/, "");
 
         const history = session.messages.map((m) => ({
@@ -273,7 +280,6 @@ export const chatService = {
             {
                 session_id: sessionId,
                 user_message: userMessage,
-                level: session.level,
                 category: session.category,
                 history,
                 images,
@@ -286,6 +292,14 @@ export const chatService = {
         );
 
         return response.data;
+    },
+
+    async getMessageById(id: string) {
+        try {
+            return await prisma.message.findUnique({ where: { id } });
+        } catch {
+            return null;
+        }
     },
 
     async saveShareCard(messageId: string, summary: string, score: number, actions: any) {
