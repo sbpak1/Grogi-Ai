@@ -110,7 +110,9 @@ export const chatService = {
     async ensureSessionForChat(sessionId: string, userId?: string, privateMode: boolean = false) {
         try {
             if (!userId) {
-                throw new Error("인증된 사용자만 채팅할 수 있습니다");
+                // 게스트는 DB 저장 없이 인메모리 세션 사용
+                console.log(`[chatService] Guest access for session: ${sessionId}`);
+                return toMockContext(getOrCreateMockSession(sessionId));
             }
 
             const resolvedUserId = userId;
