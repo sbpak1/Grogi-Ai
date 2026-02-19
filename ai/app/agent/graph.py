@@ -1,4 +1,5 @@
 import base64
+import json
 from io import BytesIO
 from typing import TypedDict, List
 from pathlib import Path
@@ -546,6 +547,45 @@ async def refine_response(state: AgentState):
     }
 
 
+async def calculate_reality_score(state: AgentState):
+    """답변 내용을 바탕으로 현실 자각 상태 점수(0~100) 계산"""
+    diagnosis = state.get("diagnosis", "")
+    user_msg = state.get("user_message", "")
+
+    score_prompt = ChatPromptTemplate.from_messages([
+        ("system", """사용자의 입력과 AI의 조언을 분석하여 '현실 자각 상태' 점수를 계산하라.
+0점: 현실 부정, 망상, 극심한 합리화
+100점: 현실 직시, 뼈 아픈 반성, 개선 의지 충만
+
+결과는 반드시 아래 JSON 형식으로만 답하라:
+{{
+  "total": 75,
+  "breakdown": {{
+    "realism": 20,
+    "effort": 25,
+    "urgency": 30
+  }},
+  "summary": "한 줄 요약"
+}}
+"""),
+        ("user", f"사용자: {user_msg}\nAI: {diagnosis}")
+    ])
+
+    try:
+        chain = score_prompt | llm_mini | StrOutputParser()
+        res_text = await chain.ainvoke({})
+        # JSON 추출
+        import re
+        match = re.search(r"\{.*\}", res_text, re.DOTALL)
+        if match:
+            score_data = json.loads(match.group(0))
+            return {"reality_score": score_data}
+    except Exception as e:
+        print(f"[Score Error] {e}")
+
+    return {"reality_score": {"total": 50, "summary": "분석 실패"}}
+
+
 
 async def fan_out(state: AgentState):
     """병렬 실행을 위한 시작점 (Pass-through)"""
@@ -566,6 +606,7 @@ def build_graph():
     workflow.add_node("generate_response", generate_response)
     workflow.add_node("check_response", check_response)
     workflow.add_node("refine_response", refine_response)
+    workflow.add_node("calculate_score", calculate_reality_score)
     workflow.set_entry_point("crisis_check")
 
     def route_crisis(x):
@@ -619,6 +660,7 @@ def build_graph():
     
     # Response Self-Correction Loop
     workflow.add_edge("generate_response", "check_response")
+    workflow.add_edge("generate_response", "calculate_score")
 
 
     
@@ -635,9 +677,10 @@ def build_graph():
         route_response_check,
         {
             "refine": "refine_response",
-            "pass": END
+            "pass": "calculate_score"
         }
     )
+    workflow.add_edge("calculate_score", END)
     workflow.add_edge("refine_response", "generate_response")
     
     return workflow.compile()
