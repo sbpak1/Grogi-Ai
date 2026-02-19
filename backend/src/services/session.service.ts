@@ -1,17 +1,5 @@
 import { prisma } from "../lib/prisma";
-
-function isPrismaUnavailableError(error: any) {
-    if (!error) return false;
-    const code = String(error.code || "");
-    const message = String(error.message || "");
-    return (
-        code === "P2021" ||
-        code === "P1001" ||
-        code === "ECONNREFUSED" ||
-        message.includes("does not exist") ||
-        message.includes("ECONNREFUSED")
-    );
-}
+import { isPrismaUnavailableError } from "../lib/prisma-errors";
 
 function isUserNotFoundError(error: any) {
     if (!error) return false;
@@ -24,11 +12,11 @@ function isUserNotFoundError(error: any) {
 }
 
 export const sessionService = {
-    async createSession(userId: string) {
+    async createSession(userId: string, privateMode: boolean = false) {
         const data = {
             userId,
             category: "etc",
-            level: "spicy",
+            privateMode,
         };
         try {
             return await prisma.session.create({ data });
@@ -53,6 +41,7 @@ export const sessionService = {
                 where: {
                     id: sessionId,
                     userId,
+                    isDeleted: false,
                 },
                 include: {
                     messages: {
@@ -66,7 +55,6 @@ export const sessionService = {
                 id: sessionId,
                 userId,
                 category: "etc",
-                level: "spicy",
                 messages: [],
                 createdAt: new Date(),
             };
@@ -76,7 +64,11 @@ export const sessionService = {
     async getUserSessions(userId: string) {
         try {
             return await prisma.session.findMany({
-                where: { userId },
+                where: {
+                    userId,
+                    privateMode: false, // 비밀 채팅은 목록에서 제외
+                    isDeleted: false,
+                },
                 orderBy: { createdAt: "desc" },
                 include: {
                     messages: {
@@ -88,6 +80,36 @@ export const sessionService = {
         } catch (error) {
             if (!isPrismaUnavailableError(error)) throw error;
             return [];
+        }
+    },
+
+    async updatePrivacy(sessionId: string, userId: string, privateMode: boolean) {
+        try {
+            return await prisma.session.update({
+                where: {
+                    id: sessionId,
+                    userId,
+                },
+                data: { privateMode },
+            });
+        } catch (error) {
+            if (!isPrismaUnavailableError(error)) throw error;
+            throw error;
+        }
+    },
+
+    async softDeleteSession(sessionId: string, userId: string) {
+        try {
+            return await prisma.session.update({
+                where: {
+                    id: sessionId,
+                    userId,
+                },
+                data: { isDeleted: true },
+            });
+        } catch (error) {
+            if (!isPrismaUnavailableError(error)) throw error;
+            throw error;
         }
     },
 };

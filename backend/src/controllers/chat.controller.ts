@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import { chatService } from "../services/chat.service";
 
 export const chatController = {
     async send(req: Request, res: Response) {
-        const { sessionId, message, images, ocr_text, pdfs } = req.body;
+        const { sessionId, message, messageId, images, ocr_text, pdfs, privateMode } = req.body;
 
         if (images && images.length > 5) {
             res.status(400).json({ error: "이미지는 최대 5장까지 가능합니다" });
@@ -29,11 +30,32 @@ export const chatController = {
         const resolvedSessionId =
             typeof sessionId === "string" && sessionId.trim()
                 ? sessionId.trim()
-                : `dev-${Date.now()}`;
+                : crypto.randomUUID();
+
+        // 1. Idempotency Check (Early Return)
+        // If messageId is provided, check if it already exists in DB.
+        // If it exists, we assume it's a duplicate request (retry) and we should stop.
+        // For a full implementation, we might want to return the previous response, but for now, 
+        // we'll just prevent reprocessing and return a 200 OK or specific code.
+        // However, since this is an SSE stream, we can't easily "replay" the stream. 
+        // We will log it and proceed with caution, or if it's strictly a duplicate send, we stop.
+        if (messageId) {
+            const existing = await chatService.getMessageById(messageId);
+            if (existing) {
+                console.log(`[chatController] Idempotency check: Message ${messageId} already exists. Returning 200 OK to stop retry.`);
+                // Client likely retried, but we already have it. 
+                // We can either ignore (and let client receive nothing but success) or send a specific event.
+                // For now, let's just end the response to stop further processing.
+                res.status(200).json({ message: "Already processed" });
+                return;
+            }
+        }
 
         try {
-            await chatService.ensureSessionForChat(resolvedSessionId, req.userId);
-            await chatService.saveMessage(resolvedSessionId, "user", message);
+            const context = await chatService.ensureSessionForChat(resolvedSessionId, req.userId, !!privateMode);
+            if (context.persist) {
+                await chatService.saveMessage(resolvedSessionId, "user", message, undefined, undefined, messageId);
+            }
 
             const stream = await chatService.getAiResponseStream(
                 resolvedSessionId,
@@ -41,7 +63,8 @@ export const chatController = {
                 images,
                 ocr_text,
                 req.userId,
-                pdfs
+                pdfs,
+                !!privateMode
             );
 
             res.setHeader("Content-Type", "text/event-stream");
@@ -51,6 +74,32 @@ export const chatController = {
             let realityScore: any = null;
             let shareCard: any = null;
             let doneSentByUpstream = false;
+            let messageSaved = false;
+
+            async function persistAssistantMessage() {
+                if (messageSaved || !fullAssistantMessage || !context.persist) return;
+                messageSaved = true;
+                try {
+                    const savedMsg = await chatService.saveMessage(
+                        resolvedSessionId,
+                        "assistant",
+                        fullAssistantMessage,
+                        realityScore?.total || 0,
+                        realityScore
+                    );
+
+                    if (shareCard && savedMsg?.id) {
+                        await chatService.saveShareCard(
+                            savedMsg.id,
+                            shareCard.summary,
+                            shareCard.score,
+                            shareCard.actions
+                        );
+                    }
+                } catch (persistError) {
+                    console.error("Chat persistence error:", persistError);
+                }
+            }
 
             stream.on("data", (chunk: Buffer) => {
                 const lines = chunk.toString().split("\n");
@@ -84,28 +133,7 @@ export const chatController = {
             stream.pipe(res, { end: false });
 
             stream.on("end", async () => {
-                try {
-                    if (fullAssistantMessage) {
-                        const savedMsg = await chatService.saveMessage(
-                            resolvedSessionId,
-                            "assistant",
-                            fullAssistantMessage,
-                            realityScore?.total || 0,
-                            realityScore
-                        );
-
-                        if (shareCard && savedMsg?.id) {
-                            await chatService.saveShareCard(
-                                savedMsg.id,
-                                shareCard.summary,
-                                shareCard.score,
-                                shareCard.actions
-                            );
-                        }
-                    }
-                } catch (persistError) {
-                    console.error("Chat persistence error:", persistError);
-                }
+                await persistAssistantMessage();
 
                 if (!doneSentByUpstream) {
                     res.write("data: [DONE]\n\n");
@@ -122,20 +150,26 @@ export const chatController = {
                 res.end();
             });
 
-            req.on("close", () => {
+            req.on("close", async () => {
                 if (!res.writableEnded) {
                     stream.destroy();
                 }
+                await persistAssistantMessage();
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);
-            res.status(500).json({ error: error.message || "message send failed" });
+            res.status(500).json({ error: "메시지 전송에 실패했습니다" });
         }
     },
 
     async getHistory(req: Request, res: Response) {
         const sessionId = req.params.sessionId as string;
         try {
+            const isOwner = await chatService.verifySessionOwner(sessionId, req.userId!);
+            if (!isOwner) {
+                res.status(403).json({ error: "해당 세션에 접근 권한이 없습니다" });
+                return;
+            }
             const messages = await chatService.getChatHistory(sessionId);
             res.json({ messages });
         } catch {

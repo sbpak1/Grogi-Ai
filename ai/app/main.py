@@ -1,11 +1,11 @@
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -37,28 +37,27 @@ app.add_middleware(
 
 
 class ChatMessage(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"] = Field(..., description="메시지 역할")
+    content: str = Field(..., max_length=10000)
 
 
 class PdfAttachment(BaseModel):
-    filename: str
-    content: str
+    filename: str = Field(..., max_length=255)
+    content: str = Field(..., max_length=20_000_000)  # ~15MB base64
 
 
 class ChatRequest(BaseModel):
-    session_id: str
-    user_message: str
-    level: str
-    category: str
-    history: List[ChatMessage]
-    images: Optional[List[str]] = None
-    ocr_text: Optional[str] = None
-    pdfs: Optional[List[PdfAttachment]] = None
+    session_id: str = Field(..., max_length=200)
+    user_message: str = Field(..., max_length=10000)
+    category: str = Field(..., max_length=50)
+    history: List[ChatMessage] = Field(default=[], max_length=50)
+    images: Optional[List[str]] = Field(default=None, max_length=5)
+    ocr_text: Optional[str] = Field(default=None, max_length=10000)
+    pdfs: Optional[List[PdfAttachment]] = Field(default=None, max_length=3)
 
 
 class TitleRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=5000)
 
 
 @app.get("/agent/health")
@@ -107,12 +106,10 @@ async def real_agent_generator(request: ChatRequest):
     initial_state = {
         "session_id": request.session_id,
         "user_message": request.user_message,
-        "level": "spicy",
         "category": request.category,
         "history": [msg.dict() for msg in request.history],
         "images": request.images or [],
         "pdfs": [p.dict() for p in request.pdfs] if request.pdfs else [],
-        "status": "starting",
         "current_section": "diagnosis",
     }
 
@@ -144,9 +141,7 @@ async def real_agent_generator(request: ChatRequest):
 
                 # LangGraph 노드 종료 이벤트만 처리 (metadata에 langgraph_node가 있는 경우)
                 if event.get("metadata", {}).get("langgraph_node") != node_name:
-                    # 노드 자체가 아닌 내부 체인 종료는 무시
-                    if node_name != "generate_response":
-                        continue
+                    continue
 
                 if node_name == "crisis_check":
                     res = event["data"]["output"]
@@ -209,7 +204,9 @@ async def real_agent_generator(request: ChatRequest):
                 yield {"event": "section", "data": json.dumps({"type": "diagnosis"})}
 
     except Exception as e:
-        yield {"event": "error", "data": json.dumps({"code": "AGENT_ERROR", "message": f"에러 발생: {str(e)}"})}
+        import logging
+        logging.exception("Agent error during chat generation")
+        yield {"event": "error", "data": json.dumps({"code": "AGENT_ERROR", "message": "처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요."})}
 
     yield {"event": "done", "data": "{}"}
 
@@ -222,12 +219,21 @@ async def chat_endpoint(request: ChatRequest):
 @app.post("/agent/title")
 async def title_endpoint(request: TitleRequest):
     try:
+        # 1. 언어 먼저 감지
+        lang_prompt = ChatPromptTemplate.from_messages([
+            ("system", "Detect the language of the input. Return ONLY the language name in English (e.g. Korean, English)."),
+            ("user", "{input}")
+        ])
+        lang_chain = lang_prompt | llm_mini | StrOutputParser()
+        detected_lang = (await lang_chain.ainvoke({"input": request.message})).strip()
+
+        # 2. 감지된 언어에 맞춰 제목 생성
         title_prompt = ChatPromptTemplate.from_messages([
-            ("system", """사용자의 첫 메시지를 보고 대화방의 제목을 창의적으로 지어줘.
-- 결과는 15자 이내로 짧고 강렬하게.
-- 이모지는 절대 쓰지마. 문장으로만 작성해
-- 조사나 불필요한 단어는 빼고 핵심만. (예: "에너지 드링크 과유불급", "카페인 중독 경고")
-- 제목만 딱 답해."""),
+            ("system", f"""Create a punchy chat room title based on the user's message.
+- MAX 15 characters.
+- NO emojis.
+- Language: {detected_lang}
+- Only return the title itself."""),
             ("user", "{input}")
         ])
         chain = title_prompt | llm_mini | StrOutputParser()
