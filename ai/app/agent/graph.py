@@ -14,7 +14,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from app.prompts.system_prompts import SYSTEM_PROMPT_BASE
-from app.tools.calculator import calculate_reality_score_logic
 from app.tools.search import get_search_tool
 
 
@@ -314,7 +313,7 @@ Be concise and factual."""
 
         messages[1].content.append({"type": "image_url", "image_url": {"url": img_url}})
 
-    vision_llm = ChatAnthropic(model="claude-haiku-4-5-20251001")
+    vision_llm = ChatOpenAI(model="gpt-4o")
     result = await vision_llm.ainvoke(messages)
     return {"image_analysis": result.content}
 
@@ -543,29 +542,6 @@ async def refine_response(state: AgentState):
         "response_retry_count": state.get("response_retry_count", 0) + 1
     }
 
-def calculate_score(state: AgentState):
-    """
-    AG-12: 별도 노드로 분리하여 스트리밍 누수 방지
-    """
-    reality_score = calculate_reality_score_logic(
-        state["user_message"], 
-        state["diagnosis"], 
-        state.get("detected_language", "Korean")
-    )
-
-    share_card = {
-        "summary": reality_score.get("summary", "팩폭 요약: 현실 도피 그만하고 정신 차려!"),
-        "score": reality_score["total"],
-        "actions": ["1. 휴대폰 끄고 책상 앉기", "2. 우선순위 정하기", "3. 30분만 집중해보기"],
-    }
-
-    return {
-        "reality_score": reality_score,
-        "share_card": share_card,
-        "status": "completed",
-    }
-
-
 
 
 async def fan_out(state: AgentState):
@@ -587,7 +563,6 @@ def build_graph():
     workflow.add_node("generate_response", generate_response)
     workflow.add_node("check_response", check_response)
     workflow.add_node("refine_response", refine_response)
-    workflow.add_node("calculate_score", calculate_score)
     workflow.set_entry_point("crisis_check")
 
     def route_crisis(x):
@@ -659,11 +634,9 @@ def build_graph():
         route_response_check,
         {
             "refine": "refine_response",
-            "pass": "calculate_score"
+            "pass": END
         }
     )
     workflow.add_edge("refine_response", "generate_response")
     
-    workflow.add_edge("calculate_score", END)
-
     return workflow.compile()
