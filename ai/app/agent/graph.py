@@ -37,6 +37,10 @@ class AgentState(TypedDict):
     pdf_text: str
     pdf_images: List[str]
     detected_language: str # "Korean", "English", "Japanese", "Chinese", etc.
+    search_count: int  # 검색 재시도 횟수
+    search_history: List[str]  # 이전 검색어 기록
+    response_retry_count: int  # [NEW] 재전송 횟수
+    response_critique: str  # [NEW] 비평 내용
 
 
 # ai/.env를 명시 로드하여 상위 쉘 환경변수보다 우선 적용
@@ -322,14 +326,18 @@ async def execute_tools(state: AgentState):
     search_tool = get_search_tool(detected_lang)
     search_results = "No search results"
 
+    # 검색 쿼리가 상태에 미리 저장되어 있으면 그걸 사용, 아니면 user_message에서 추출
+    current_search_query = state.get("current_search_query", None)
+    
     if search_tool:
         # Recent history for context
         history = state.get("history", [])
         context_msgs = history[-3:] if history else []
         context_str = "\n".join([f"{m['role']}: {m['content']}" for m in context_msgs])
 
-        extract_prompt = ChatPromptTemplate.from_messages([
-            ("system", """사용자 메시지에서 실시간 정보나 최신 유행어 검색이 필요한 키워드를 추출해.
+        if not current_search_query:
+            extract_prompt = ChatPromptTemplate.from_messages([
+                ("system", """사용자 메시지에서 실시간 정보나 최신 유행어 검색이 필요한 키워드를 추출해.
 - 모르는 단어, 유행어, 특정 브랜드명, 사건 사고, 논문/자료 링크, 도서 정보 등.
 - 사용자가 구체적인 정보(링크, 제목, 출처)를 요구하거나 실시간 확인이 필요한 모든 상황.
 - 검색할 게 없으면 "NONE"이라고만 답해.
@@ -337,16 +345,18 @@ async def execute_tools(state: AgentState):
 
 [이전 대화 맥락]
 {context}"""),
-            ("user", "{input}")
-        ])
-        extract_chain = extract_prompt | llm_mini | StrOutputParser()
-        search_query = (await extract_chain.ainvoke({"input": state["user_message"], "context": context_str})).strip()
+                ("user", "{input}")
+            ])
+            extract_chain = extract_prompt | llm_mini | StrOutputParser()
+            search_query = (await extract_chain.ainvoke({"input": state["user_message"], "context": context_str})).strip()
+        else:
+            search_query = current_search_query
 
         if search_query and search_query.upper() != "NONE":
-            print(f"[Search] Query extracted: {search_query}")
+            print(f"[Search] Query: {search_query}")
             try:
-                # 쿼리에 "뜻"이나 "의미"를 추가하여 더 정확한 정의를 유도
-                if len(search_query.split()) == 1 and not any(kw in search_query for kw in ["뜻", "의미", "뭐야"]):
+                # 쿼리에 "뜻"이나 "의미"를 추가하여 더 정확한 정의를 유도 (최초 검색일 때만)
+                if not current_search_query and len(search_query.split()) == 1 and not any(kw in search_query for kw in ["뜻", "의미", "뭐야"]):
                     search_query += " 뜻 의미"
                 
                 results = search_tool.invoke({"query": search_query})
@@ -357,8 +367,58 @@ async def execute_tools(state: AgentState):
             except Exception as e:
                 print(f"[Search Error] {e}")
                 search_results = f"검색 중 오류 발생: {str(e)}"
+            
+            # 검색 히스토리에 추가
+            hist = state.get("search_history", [])
+            hist.append(search_query)
+            state["search_history"] = hist
 
     return {"factcheck": search_results, "status": "executing_tools"}
+
+
+async def check_search_quality(state: AgentState):
+    """검색 결과가 충분한지 판단하고 재검색 여부를 결정"""
+    search_results = state.get("factcheck", "")
+    search_count = state.get("search_count", 0)
+    
+    # 결과가 없거나 오류인 경우
+    if not search_results or "검색 결과가 없습니다" in search_results or "오류 발생" in search_results:
+        if search_count < 2:  # 최대 2회 재시도 (총 3회 검색)
+             return "rewrite"
+        return "pass"
+
+    # 결과는 있지만 내용이 부실한지 LLM이 판단 (선택적)
+    # 여기서는 간단히 결과 길이로 1차 판단하거나, LLM 호출을 추가할 수 있음
+    if len(search_results) < 50 and search_count < 2:
+        return "rewrite"
+        
+    return "pass"
+
+
+async def rewrite_query(state: AgentState):
+    """검색어가 별로였을 때 더 나은 검색어로 수정"""
+    search_history = state.get("search_history", [])
+    last_query = search_history[-1] if search_history else state["user_message"]
+    
+    rewrite_prompt = ChatPromptTemplate.from_messages([
+        ("system", """이전 검색 결과가 좋지 않았어. 더 나은 검색어를 제안해줘.
+1. 더 구체적인 키워드를 사용해.
+2. 한국어 결과가 없으면 영어로 번역해서 검색해봐.
+3. 오직 새로운 검색어 하나만 반환해.
+
+[이전 검색어] {last_query}"""),
+        ("user", "새로운 검색어 제안해")
+    ])
+    
+    chain = rewrite_prompt | llm_mini | StrOutputParser()
+    new_query = (await chain.ainvoke({"last_query": last_query})).strip()
+    
+    print(f"[Search Rewrite] {last_query} -> {new_query}")
+    
+    return {
+        "current_search_query": new_query,
+        "search_count": state.get("search_count", 0) + 1
+    }
 
 
 async def generate_response(state: AgentState):
@@ -368,8 +428,17 @@ async def generate_response(state: AgentState):
     level_prompt = "톤: 냉정하고 직설적으로. 듣기 싫은 말 거침없이. 해결책은 칼같이."
     today = datetime.now().strftime("%Y년 %m월 %d일")
 
+    critique = state.get("response_critique", "")
+
     full_system_prompt = f"""{SYSTEM_PROMPT_BASE}
 {level_prompt}
+
+[Behavioral Correction Rules - CRITICAL]
+1. **NO VALIDATION for Bad Behavior**: If the user asks for validation ("Am I wrong?", "Did I do anything wrong?") regarding unethical, selfish, or unreasonable behavior (e.g., entitlement, blocking delivery workers, noise complaints, rude behavior), DO NOT validate them.
+2. **Sharp Criticism**: Explicitly point out their fault. Say "Yes, you are wrong" or "That is selfish." Do not sugarcoat it.
+3. **No Empty Empathy**: Do not use phrases like "It must be hard" or "I understand how you feel" if the user is clearly in the wrong.
+4. **Fact-Bombing**: Focus on the consequences of their actions on others.
+5. **Critique Feedback**: {critique} (If present, reflect this feedback in your response.)
 
 [Current Context]
 Current Date: {today}
@@ -450,6 +519,42 @@ Detected Language: {state.get('detected_language', 'Korean')}
         "status": "generated"
     }
 
+
+async def check_response(state: AgentState):
+    """생성된 답변의 품질과 윤리성을 검증 (Self-Correction)"""
+    diagnosis = state.get("diagnosis", "")
+    retry_count = state.get("response_retry_count", 0)
+
+    if retry_count >= 1:
+        return {"response_critique": "Max retries reached."}
+
+    check_prompt = ChatPromptTemplate.from_messages([
+        ("system", """너는 AI 윤리 및 품질 검수관이다.
+아래 AI의 답변을 평가하라.
+1. 사용자의 질문에 적절히 답변했는가?
+2. **[중요]** 비윤리적, 반사회적, 이기적인 행동을 옹호하거나 정당화하지 않았는가?
+3. 사회 통념에 어긋나는 내용이 포함되어 있는가?
+
+문제가 있다면 무엇이 문제인지 짧게 지적하라. (Critique)
+문제가 없다면 "PASS"라고만 답하라.
+"""),
+        ("user", f"사용자 질문: {state['user_message']}\nAI 답변: {diagnosis}")
+    ])
+
+    chain = check_prompt | llm_mini | StrOutputParser()
+    critique = (await chain.ainvoke({})).strip()
+
+    print(f"[Response Check] {critique}")
+
+    return {"response_critique": critique}
+
+
+async def refine_response(state: AgentState):
+    """비평을 반영하여 재시도 카운트 증가"""
+    return {
+        "response_retry_count": state.get("response_retry_count", 0) + 1
+    }
+
 def calculate_score(state: AgentState):
     """
     AG-12: 별도 노드로 분리하여 스트리밍 누수 방지
@@ -482,7 +587,11 @@ def build_graph():
     workflow.add_node("analyze_input", analyze_input)
     workflow.add_node("detect_language", detect_language)
     workflow.add_node("execute_tools", execute_tools)
+    workflow.add_node("check_search_quality", check_search_quality)
+    workflow.add_node("rewrite_query", rewrite_query)
     workflow.add_node("generate_response", generate_response)
+    workflow.add_node("check_response", check_response)
+    workflow.add_node("refine_response", refine_response)
     workflow.add_node("calculate_score", calculate_score)
     workflow.set_entry_point("crisis_check")
 
@@ -499,13 +608,64 @@ def build_graph():
         route_crisis,
         {"crisis": END, "unclear": END, "safe": "detect_language"},
     )
+    
+    def route_search_loop(x):
+        """검색 품질 체크 후 라우팅"""
+        # check_search_quality 함수가 직접 반환하는 값은 여기서 쓰지 않음 (StateGraph 구조상)
+        # 대신 state 안의 값이나 로직을 다시 태워야 하는데, 
+        # 위에서 check_search_quality를 노드로 만들었으니 그 결과를 이용해야 함.
+        # 하지만 langgraph에서 노드 반환값으로 분기하려면 conditional_edges를 그 노드 뒤에 붙여야 함.
+        
+        # 여기서는 단순히 check_search_quality 노드가 state를 업데이트하지 않고 
+        # 바로 분기 로직을 태우기 위해 별도 함수 대신 노드 로직을 수정하거나
+        # conditional edge에서 직접 판단하게 해야 함. 
+        
+        # 수정: check_search_quality 노드를 제거하고 conditional_edge 함수에서 직접 판단.
+        # 또는 check_search_quality가 'search_quality' 같은 state를 남기게 해야 함.
+        
+        # 간단하게 구현하기 위해: execute_tools 뒤에 바로 분기 함수 붙임
+        factcheck = x.get("factcheck", "")
+        search_count = x.get("search_count", 0)
+        
+        if (not factcheck or "검색 결과가 없습니다" in factcheck) and search_count < 2:
+            return "retry"
+        return "pass"
 
     workflow.add_edge("detect_language", "extract_pdf_text")
     workflow.add_edge("extract_pdf_text", "analyze_images")
     workflow.add_edge("analyze_images", "analyze_input")
     workflow.add_edge("analyze_input", "execute_tools")
-    workflow.add_edge("execute_tools", "generate_response")
-    workflow.add_edge("generate_response", "calculate_score")
+    
+    # Search Loop
+    workflow.add_conditional_edges(
+        "execute_tools",
+        route_search_loop,
+        {
+            "retry": "rewrite_query", 
+            "pass": "generate_response"
+        }
+    )
+    workflow.add_edge("rewrite_query", "execute_tools")
+    
+    # Response Self-Correction Loop
+    workflow.add_edge("generate_response", "check_response")
+    
+    def route_response_check(x):
+        critique = x.get("response_critique", "PASS")
+        if critique != "PASS" and x.get("response_retry_count", 0) < 1:
+            return "refine"
+        return "pass"
+        
+    workflow.add_conditional_edges(
+        "check_response",
+        route_response_check,
+        {
+            "refine": "refine_response",
+            "pass": "calculate_score"
+        }
+    )
+    workflow.add_edge("refine_response", "generate_response")
+    
     workflow.add_edge("calculate_score", END)
 
     return workflow.compile()
