@@ -178,22 +178,25 @@ export const chatService = {
 
     async getChatHistory(sessionId: string) {
         try {
-            return await prisma.message.findMany({
+            const dbMessages = await prisma.message.findMany({
                 where: { sessionId },
                 orderBy: { createdAt: "asc" },
             });
+            if (dbMessages.length > 0) return dbMessages;
         } catch (error: any) {
             if (!isPrismaUnavailableError(error)) throw error;
-            return getOrCreateMockSession(sessionId).messages.map((m) => ({
-                id: m.id,
-                sessionId: m.sessionId,
-                role: m.role,
-                content: m.content,
-                realityScore: m.realityScore,
-                scoreBreakdown: m.scoreBreakdown,
-                createdAt: m.createdAt,
-            }));
         }
+
+        // DB에 없거나 에러난 경우 모크 저장소 확인
+        return getOrCreateMockSession(sessionId).messages.map((m) => ({
+            id: m.id,
+            sessionId: m.sessionId,
+            role: m.role,
+            content: m.content,
+            realityScore: m.realityScore,
+            scoreBreakdown: m.scoreBreakdown,
+            createdAt: m.createdAt,
+        }));
     },
 
     async saveMessage(sessionId: string, role: string, content: string, realityScore?: number, scoreBreakdown?: any, messageId?: string) {

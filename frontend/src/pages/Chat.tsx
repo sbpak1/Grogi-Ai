@@ -7,8 +7,17 @@ import remarkBreaks from 'remark-breaks'
 import nomalImg from "../assets/nomal.png"
 import angryImg from "../assets/angry.png"
 import angelImg from "../assets/angel.png"
+import fireImg from "../assets/fire.png"
 
 type MessageItem = { role: 'user' | 'assistant' | 'system'; content: string }
+
+interface FireParticle {
+  id: number
+  left: number
+  delay: number
+  duration: number
+  size: number
+}
 
 interface ChatProps {
   sessionId: string | null
@@ -24,6 +33,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const [attachedImages, setAttachedImages] = useState<string[]>([])
   const [attachedPdfs, setAttachedPdfs] = useState<Array<{ name: string; base64: string }>>([])
   const [loadingHistory, setLoadingHistory] = useState(!!sessionId)
+  const [fireParticles, setFireParticles] = useState<FireParticle[]>([])
   const justStartedRef = useRef(false);
   const [toast, setToast] = useState<string | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -53,6 +63,29 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
   const [thinkingImgIdx, setThinkingImgIdx] = useState(0)
   const [currentIdleImg, setCurrentIdleImg] = useState(nomalImg)
   const thinkingImgs = [nomalImg, angryImg, angelImg]
+  let nextFireParticleId = useRef(0)
+
+  const handleCharacterClick = () => {
+    const newParticles: FireParticle[] = []
+    const particleCount = 8 + Math.floor(Math.random() * 5) // 8-12 particles per click
+
+    for (let i = 0; i < particleCount; i++) {
+      newParticles.push({
+        id: nextFireParticleId.current++,
+        left: Math.random() * 100,
+        delay: Math.random() * 0.5,
+        duration: 3 + Math.random() * 2,
+        size: 30 + Math.random() * 70
+      })
+    }
+
+    setFireParticles(prev => [...prev, ...newParticles])
+
+    // Cleanup particles after they finish animating (max duration 5.5s)
+    setTimeout(() => {
+      setFireParticles(prev => prev.filter(p => !newParticles.find(np => np.id === p.id)))
+    }, 6000)
+  }
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>
@@ -180,8 +213,14 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     try {
       let currentSessionId = sessionId
       if (!currentSessionId) {
-        const data = await createSession(isPrivateRequested)
-        currentSessionId = data.session_id
+        const token = localStorage.getItem('token')
+        if (token) {
+          const data = await createSession(isPrivateRequested)
+          currentSessionId = data.session_id
+        } else {
+          // 비로그인 상태: 세션 생성 API 생략하고 로컬 UUID 사용
+          currentSessionId = self.crypto.randomUUID()
+        }
         justStartedRef.current = true // 플래그 설정
         onSessionStarted(currentSessionId!)
       }
@@ -454,6 +493,7 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
               className="characterImg"
               src={currentIdleImg}
               alt="Grogi"
+              onClick={handleCharacterClick}
               onMouseEnter={() => {
                 const rand = Math.random() < 0.5 ? angryImg : angelImg;
                 setCurrentIdleImg(rand);
@@ -462,9 +502,6 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
                 setCurrentIdleImg(nomalImg);
               }}
             />
-            <div className="inputArea emptyStateInput">
-              {renderInputForm()}
-            </div>
           </div>
         )}
 
@@ -501,11 +538,26 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
         )}
       </div>
 
-      {(messages.length > 0 || streaming) && (
-        <div className="inputArea">
-          {renderInputForm()}
-        </div>
-      )}
+      <div className="inputArea">
+        {renderInputForm()}
+      </div>
+
+      {/* Global Fire Particles */}
+      {fireParticles.map((particle) => (
+        <img
+          key={particle.id}
+          src={fireImg}
+          alt="fire"
+          className="fireParticle"
+          style={{
+            left: `${particle.left}%`,
+            animationDelay: `${particle.delay}s`,
+            animationDuration: `${particle.duration}s`,
+            width: `${particle.size}px`,
+            height: `${particle.size}px`,
+          }}
+        />
+      ))}
     </>
   )
 }
