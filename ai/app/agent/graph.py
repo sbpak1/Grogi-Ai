@@ -431,6 +431,7 @@ Real-time Info: {state.get('factcheck', 'No search results')}
 Image Analysis: {state.get('image_analysis', 'None')}
 Document Content: {state.get('pdf_text', 'None')}
 
+
 [Response Guidelines]
 0. **CRITICAL**: Respond ONLY in the [Detected Language] specified below. Do not use Korean unless detected.
 1. **[강력] 문단을 형성하여 말하라**: 한 줄 한 줄 끊어서 출력하지 말고, 문장을 이어서 말하여 하나의 덩어리(문단)를 만들어라.
