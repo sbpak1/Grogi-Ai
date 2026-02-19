@@ -178,10 +178,17 @@ export default function Chat({ sessionId, onSessionStarted, isPrivateRequested =
     const text = input.trim()
     if (!text && attachedImages.length === 0 && attachedPdfs.length === 0) return
 
+    // 게스트 메시지 카운트 체크
     const token = localStorage.getItem('token')
     if (!token) {
-      redirectToKakaoLogin()
-      return
+      const currentCount = parseInt(localStorage.getItem('guest_msg_count') || '0', 10)
+      if (currentCount >= 5) {
+        if (confirm('무료 사용량을 초과했습니다. 로그인 하시겠습니까?')) {
+          redirectToKakaoLogin()
+        }
+        return
+      }
+      localStorage.setItem('guest_msg_count', (currentCount + 1).toString())
     }
 
     isSendingRef.current = true // 즉시 잠금

@@ -75,6 +75,7 @@ export default function App() {
       refreshSessions()
       fetchProfile()
     } else {
+      // 비로그인 상태여도 세션 초기화 (게스트 모드)
       setProfile(null)
       setSessions([])
     }
