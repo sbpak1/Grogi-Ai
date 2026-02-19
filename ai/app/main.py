@@ -189,6 +189,8 @@ async def real_agent_generator(request: ChatRequest):
 
                 elif node_name == "generate_response":
                     if sent_content:
+                        # 텍스트 출력이 끝났음을 즉시 알림 (사용자 대기 방지)
+                        yield {"event": "done", "data": "{}"}
                         continue # 이미 스트리밍으로 보냄
                     
                     final_result = event["data"]["output"]
@@ -198,6 +200,12 @@ async def real_agent_generator(request: ChatRequest):
                     if normalized_text.strip():
                         sent_content = True
                         yield {"event": "token", "data": json.dumps({"content": normalized_text}, ensure_ascii=False)}
+
+                elif node_name == "calculate_score":
+                    res = event["data"]["output"]
+                    score = res.get("reality_score")
+                    if score:
+                        yield {"event": "score", "data": json.dumps(score, ensure_ascii=False)}
 
 
             if kind == "on_chat_model_start" and _is_generate_response_event(event):
