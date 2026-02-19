@@ -57,3 +57,25 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     res.status(401).json({ error: "유효하지 않은 토큰입니다" });
   }
 }
+
+export function optionalAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) {
+    next();
+    return;
+  }
+
+  try {
+    const token = header.slice(7);
+    const payload = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+      issuer: "grogi-api",
+      audience: "grogi-frontend",
+    }) as JwtPayload;
+    req.userId = payload.userId;
+    next();
+  } catch {
+    // 토큰이 유효하지 않아도 게스트로 통과
+    next();
+  }
+}

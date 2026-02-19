@@ -147,6 +147,11 @@ export function chatStream(
         return
       }
 
+      if (ev.event === 'done') {
+        finish()
+        return
+      }
+
       const parsed = normalizeSseData(ev.data)
 
       if (ev.event === 'analysis_preview') {

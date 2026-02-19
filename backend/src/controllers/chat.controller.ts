@@ -164,6 +164,11 @@ export const chatController = {
 
     async getHistory(req: Request, res: Response) {
         const sessionId = req.params.sessionId as string;
+        if (!req.userId) {
+            // 게스트는 히스토리 저장 안 함 -> 빈 배열 반환
+            res.json({ messages: [] });
+            return;
+        }
         try {
             const isOwner = await chatService.verifySessionOwner(sessionId, req.userId!);
             if (!isOwner) {
