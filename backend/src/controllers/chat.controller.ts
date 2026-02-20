@@ -75,6 +75,7 @@ export const chatController = {
             let shareCard: any = null;
             let doneSentByUpstream = false;
             let messageSaved = false;
+            let clientDisconnected = false;
 
             async function persistAssistantMessage() {
                 if (messageSaved || !fullAssistantMessage || !context.persist) return;
@@ -101,8 +102,11 @@ export const chatController = {
                 }
             }
 
+            // AI 스트림 data 수집 + 클라이언트 전달을 통합
+            // 클라이언트가 끊어져도 AI 응답은 계속 수집
             stream.on("data", (chunk: Buffer) => {
-                const lines = chunk.toString().split("\n");
+                const raw = chunk.toString();
+                const lines = raw.split("\n");
                 for (const line of lines) {
                     if (!line.startsWith("data: ")) continue;
                     const dataStr = line.replace("data: ", "").trim();
@@ -128,33 +132,48 @@ export const chatController = {
                         // ignore non-JSON events
                     }
                 }
-            });
 
-            stream.pipe(res, { end: false });
+                // 클라이언트가 아직 연결돼 있으면 SSE 전달
+                if (!clientDisconnected && !res.writableEnded) {
+                    try {
+                        res.write(chunk);
+                    } catch {
+                        clientDisconnected = true;
+                    }
+                }
+            });
 
             stream.on("end", async () => {
+                // AI 응답을 무조건 DB에 저장 (클라이언트 연결 상태와 무관)
                 await persistAssistantMessage();
 
-                if (!doneSentByUpstream) {
-                    res.write("data: [DONE]\n\n");
+                // 클라이언트가 아직 연결돼 있으면 정상 종료
+                if (!clientDisconnected && !res.writableEnded) {
+                    if (!doneSentByUpstream) {
+                        res.write("data: [DONE]\n\n");
+                    }
+                    res.end();
                 }
-                res.end();
             });
 
-            stream.on("error", (err: any) => {
+            stream.on("error", async (err: any) => {
                 console.error("AI Stream Error:", err);
-                res.write(`data: ${JSON.stringify({ error: "AI stream error" })}\n\n`);
-                if (!doneSentByUpstream) {
-                    res.write("data: [DONE]\n\n");
+                // 에러가 나더라도 수집된 응답은 저장 시도
+                await persistAssistantMessage();
+
+                if (!clientDisconnected && !res.writableEnded) {
+                    res.write(`data: ${JSON.stringify({ error: "AI stream error" })}\n\n`);
+                    if (!doneSentByUpstream) {
+                        res.write("data: [DONE]\n\n");
+                    }
+                    res.end();
                 }
-                res.end();
             });
 
-            req.on("close", async () => {
-                if (!res.writableEnded) {
-                    stream.destroy();
-                }
-                await persistAssistantMessage();
+            // 클라이언트 연결 끊김 시 AI 스트림은 유지 (백그라운드 수집 계속)
+            req.on("close", () => {
+                clientDisconnected = true;
+                // stream.destroy() 제거! AI 응답은 계속 수집하여 DB에 저장
             });
         } catch (error: any) {
             console.error("Chat Controller Error:", error);
