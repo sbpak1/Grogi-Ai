@@ -274,12 +274,11 @@ export function chatStream(
     openWhenHidden: true, // 백그라운드 탭에서도 연결 유지 (재연결 방지)
     onclose() {
       if (!finished) {
-        // [DONE] 전에 연결이 끊김 → 에러 처리 (탭 전환 중 브라우저가 끊은 경우 등)
-        handlers.onError?.(new Error('연결이 끊어졌습니다. 다시 시도해주세요.'))
+        // 백그라운드에서 AI 응답이 계속 처리되므로 에러 대신 조용히 종료
         finished = true
+        handlers.onDone?.()
       }
-      finish()
-      abortController.abort() // throw 대신 abort로 재연결 방지 (콘솔 에러 없음)
+      abortController.abort()
     },
   })
 
